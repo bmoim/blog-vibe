@@ -4,8 +4,9 @@ services:
     runtime: node
     region: singapore
     plan: starter
-    buildCommand: rm -rf .deployed-app && mkdir .deployed-app && base64 -d bundle/blogger-ai-source.tar.gz.b64 | tar -xz -C .deployed-app && cd .deployed-app && npm install --omit=dev
-    startCommand: cd .deployed-app && npm start
+    rootDir: blogger-ai-publisher
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
     healthCheckPath: /health
     autoDeployTrigger: off
     envVars:
