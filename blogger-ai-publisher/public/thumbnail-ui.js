@@ -7,16 +7,16 @@ function absoluteUrl(value) {
 
 function renderThumbnailTab() {
   if (!preview || !target) return;
-  const figure = preview.querySelector("figure.main-thumbnail");
-  if (!figure) {
+  const image = [...preview.querySelectorAll("img")].find((item) => /대표 썸네일/.test(item.getAttribute("alt") || ""));
+  if (!image) {
     target.innerHTML = '<p class="muted">이 초안에는 대표 썸네일이 없습니다. 새 글을 생성하면 1:1 대표 썸네일이 자동으로 만들어집니다.</p>';
     return;
   }
 
-  const image = figure.querySelector("img");
-  const caption = figure.querySelector("figcaption")?.textContent?.trim() || "블로그 대표 썸네일";
-  const src = absoluteUrl(image?.getAttribute("src"));
-  const alt = image?.getAttribute("alt") || "대표 썸네일";
+  const figure = image.closest("figure");
+  const caption = figure?.querySelector("figcaption")?.textContent?.trim() || "블로그 대표 썸네일";
+  const src = absoluteUrl(image.getAttribute("src"));
+  const alt = image.getAttribute("alt") || "대표 썸네일";
   target.innerHTML = `
     <div class="thumbnail-stage">
       <img src="${src}" alt="${alt}">
@@ -28,7 +28,7 @@ function renderThumbnailTab() {
       </div>
       <a class="button secondary" href="${src}" target="_blank" rel="noopener">이미지 열기</a>
     </div>
-    <p class="thumbnail-note">Blogger 발행 시 이 이미지가 본문 맨 위에 자동 삽입됩니다. 네이버 복사 탭에서도 첫 번째 이미지로 포함됩니다.</p>
+    <p class="thumbnail-note">Blogger 발행 시 이 이미지가 본문 맨 위 첫 번째 이미지로 들어갑니다. 네이버 복사 탭에서도 첫 번째 이미지로 포함됩니다.</p>
   `;
 }
 
