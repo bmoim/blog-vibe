@@ -85,7 +85,7 @@ function updateBadge(status, saved = false) {
 
 function bundleRecordCount(bundle) {
   const files = bundle?.files || {};
-  const names = ["drafts.json", "topic-plans.json", "activity-history.json", "draft-versions.json"];
+  const names = ["drafts.json", "topic-plans.json", "activity-history.json", "query-results.json", "draft-versions.json"];
   return names.reduce((sum, name) => sum + (Array.isArray(files[name]) ? files[name].length : 0), 0);
 }
 
