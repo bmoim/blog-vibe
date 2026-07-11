@@ -22,10 +22,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: blogger-ai-publisher/package-lock.json
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
       - name: Syntax checks
         run: npm run check
       - name: Startup smoke test
