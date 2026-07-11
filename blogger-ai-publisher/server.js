@@ -5,7 +5,7 @@ import express from "express";
 import session from "express-session";
 import sessionFileStore from "session-file-store";
 import sanitizeHtml from "sanitize-html";
-import { generateArticle, generateImages, polishArticle } from "./lib/openai-service.js";
+import { generateArticle, generateImages, polishArticle, listAvailableTextModels } from "./lib/openai-service.js";
 import { createGoogleAuthUrl, disconnectGoogle, handleGoogleCallback, isGoogleConnected, getGoogleConfigStatus, saveGoogleConfigFromJson, clearGoogleConfig, listBlogs, lookupBlogByUrl, publishPost, getGoogleRedirectUri } from "./lib/blogger-service.js";
 import { deleteDraft, getDailyUsage, getDraft, incrementDailyUsage, listDrafts, saveDraft, generatedDirectory, dataDirectory } from "./lib/storage.js";
 import { hostImages, imageHostConfigured } from "./lib/image-host.js";
@@ -14,6 +14,7 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const ROOT = process.cwd();
 const FileStore = sessionFileStore(session);
+const generationJobs = new Map();
 
 app.set("trust proxy", 1);
 app.get("/health", (req, res) => res.json({ ok: true }));
@@ -79,6 +80,11 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(ROOT, "public"), { maxAge: 0, etag: true }));
 
 function safeText(value, max = 500) { return String(value || "").trim().slice(0, max); }
+function koreaDate() {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
 
 function seoScore(article, keyword, imageCount) {
   const text = sanitizeHtml(article.body_html || "", { allowedTags: [], allowedAttributes: {} });
@@ -141,6 +147,73 @@ function withPreview(draft) {
   return { ...draft, previewHtml: sanitizeArticleHtml(appendExtras(draft.article, previewBody)) };
 }
 
+function buildGenerationInput(body = {}) {
+  return {
+    topic: safeText(body.topic, 300),
+    targetKeyword: safeText(body.targetKeyword, 150),
+    audience: safeText(body.audience, 200),
+    tone: safeText(body.tone, 200),
+    language: safeText(body.language, 50) || "한국어",
+    articleLength: Number(body.articleLength || 2500),
+    imageCount: Number(body.imageCount ?? 2),
+    customInstructions: safeText(body.customInstructions, 1500),
+    useWebResearch: true,
+    premiumReview: Boolean(body.premiumReview),
+    textModel: safeText(body.textModel, 100) || process.env.OPENAI_TEXT_MODEL || "gpt-5.6",
+    currentDate: koreaDate()
+  };
+}
+
+async function generateDraft(input, onProgress = () => {}) {
+  onProgress(12, "최신 자료를 검색하고 글 구조를 설계하고 있습니다.");
+  let article = await generateArticle(input);
+  onProgress(55, `오늘(${input.currentDate}) 기준으로 사실과 날짜를 다시 검증하고 있습니다.`);
+  article = await polishArticle(article, input);
+  onProgress(75, input.imageCount > 0 ? "본문용 이미지를 생성하고 있습니다." : "최종 글을 정리하고 있습니다.");
+  const images = input.imageCount > 0 ? await generateImages(article.image_prompts) : [];
+  onProgress(92, "초안과 SEO 점수를 저장하고 있습니다.");
+  const seo = seoScore(article, input.targetKeyword || input.topic, images.length);
+  const draft = await saveDraft({ input, article, images, seoScore: seo.score, seoChecks: seo.checks, characterCount: seo.characterCount, publishHistory: [] });
+  await incrementDailyUsage();
+  return draft;
+}
+
+function publicJob(job) {
+  return {
+    id: job.id,
+    status: job.status,
+    progress: job.progress,
+    message: job.message,
+    draftId: job.draftId || null,
+    error: job.error || null,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt
+  };
+}
+
+function updateJob(job, patch) {
+  Object.assign(job, patch, { updatedAt: new Date().toISOString() });
+}
+
+async function runGenerationJob(job, input) {
+  try {
+    updateJob(job, { status: "running", progress: 5, message: "생성 작업을 시작했습니다." });
+    const draft = await generateDraft(input, (progress, message) => updateJob(job, { progress, message }));
+    updateJob(job, { status: "completed", progress: 100, message: "글과 이미지 생성이 완료되었습니다.", draftId: draft.id });
+  } catch (error) {
+    console.error(error);
+    const message = error?.response?.data?.error?.message || error.message || "생성 중 오류가 발생했습니다.";
+    updateJob(job, { status: "failed", message, error: message });
+  }
+}
+
+setInterval(() => {
+  const cutoff = Date.now() - 1000 * 60 * 60 * 3;
+  for (const [id, job] of generationJobs.entries()) {
+    if (new Date(job.updatedAt).getTime() < cutoff && ["completed", "failed"].includes(job.status)) generationJobs.delete(id);
+  }
+}, 1000 * 60 * 20).unref();
+
 app.get("/api/status", async (req, res) => {
   const usage = await getDailyUsage();
   const dailyLimit = Math.max(1, Number(process.env.DAILY_GENERATION_LIMIT || 10));
@@ -154,12 +227,14 @@ app.get("/api/status", async (req, res) => {
     imageHostMode: process.env.IMAGE_HOST_MODE || "public",
     textModel: process.env.OPENAI_TEXT_MODEL || "gpt-5.6",
     imageModel: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2",
+    currentDate: koreaDate(),
     googleRedirectUri: getGoogleRedirectUri(),
     dailyUsage: usage.count,
     dailyLimit
   });
 });
 
+app.get("/api/models", async (req, res) => res.json({ models: await listAvailableTextModels(), defaultModel: process.env.OPENAI_TEXT_MODEL || "gpt-5.6" }));
 app.get("/api/google/config", async (req, res) => res.json(await getGoogleConfigStatus()));
 app.post("/api/google/config", async (req, res) => {
   const oauthJson = req.body?.oauthJson;
@@ -208,22 +283,33 @@ app.delete("/api/drafts/:id", async (req, res) => {
   res.status(removed ? 200 : 404).json({ ok: removed });
 });
 
+app.post("/api/generation-jobs", async (req, res) => {
+  const usage = await getDailyUsage();
+  const dailyLimit = Math.max(1, Number(process.env.DAILY_GENERATION_LIMIT || 10));
+  const activeJobs = [...generationJobs.values()].filter((job) => ["queued", "running"].includes(job.status)).length;
+  if (usage.count + activeJobs >= dailyLimit) return res.status(429).json({ error: `오늘 생성 한도(${dailyLimit}회)에 도달했습니다.` });
+  const input = buildGenerationInput(req.body);
+  if (!input.topic) return res.status(400).json({ error: "주제를 입력해 주세요." });
+  const now = new Date().toISOString();
+  const job = { id: crypto.randomUUID(), status: "queued", progress: 1, message: "생성 대기 중입니다.", createdAt: now, updatedAt: now };
+  generationJobs.set(job.id, job);
+  res.status(202).json({ job: publicJob(job) });
+  setImmediate(() => runGenerationJob(job, input));
+});
+app.get("/api/generation-jobs/:id", (req, res) => {
+  const job = generationJobs.get(req.params.id);
+  if (!job) return res.status(404).json({ error: "진행 중인 생성 작업을 찾을 수 없습니다. 서버가 재시작되었을 수 있습니다." });
+  res.json({ job: publicJob(job) });
+});
+
+// 이전 화면과의 호환성을 위한 동기식 생성 경로
 app.post("/api/generate", async (req, res) => {
   const usage = await getDailyUsage();
   const dailyLimit = Math.max(1, Number(process.env.DAILY_GENERATION_LIMIT || 10));
   if (usage.count >= dailyLimit) return res.status(429).json({ error: `오늘 생성 한도(${dailyLimit}회)에 도달했습니다.` });
-  const input = {
-    topic: safeText(req.body.topic, 300), targetKeyword: safeText(req.body.targetKeyword, 150), audience: safeText(req.body.audience, 200),
-    tone: safeText(req.body.tone, 200), language: safeText(req.body.language, 50) || "한국어", articleLength: Number(req.body.articleLength || 2500),
-    imageCount: Number(req.body.imageCount ?? 2), customInstructions: safeText(req.body.customInstructions, 1500), useWebResearch: Boolean(req.body.useWebResearch), premiumReview: Boolean(req.body.premiumReview)
-  };
+  const input = buildGenerationInput(req.body);
   if (!input.topic) return res.status(400).json({ error: "주제를 입력해 주세요." });
-  let article = await generateArticle(input);
-  if (input.premiumReview) article = await polishArticle(article, input);
-  const images = input.imageCount > 0 ? await generateImages(article.image_prompts) : [];
-  const seo = seoScore(article, input.targetKeyword || input.topic, images.length);
-  const draft = await saveDraft({ input, article, images, seoScore: seo.score, seoChecks: seo.checks, characterCount: seo.characterCount, publishHistory: [] });
-  await incrementDailyUsage();
+  const draft = await generateDraft(input);
   res.json({ draft: withPreview(draft) });
 });
 
