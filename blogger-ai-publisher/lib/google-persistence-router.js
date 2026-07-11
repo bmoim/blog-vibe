@@ -75,16 +75,27 @@ function validatePayload(payload) {
   }
 }
 
+async function currentGoogleConfig() {
+  const stored = await readGoogleOAuthConfig();
+  if (stored?.clientId && stored?.clientSecret) return stored;
+  const clientId = String(process.env.GOOGLE_CLIENT_ID || "").trim();
+  const clientSecret = String(process.env.GOOGLE_CLIENT_SECRET || "").trim();
+  if (clientId && clientSecret && !clientSecret.includes("*")) {
+    return { clientId, clientSecret, savedAt: new Date().toISOString() };
+  }
+  return null;
+}
+
 router.get("/google-session/export", async (req, res) => {
   const [token, config] = await Promise.all([
     readGoogleToken(),
-    readGoogleOAuthConfig()
+    currentGoogleConfig()
   ]);
   if (!token?.refresh_token && !token?.access_token) {
     return res.status(409).json({ error: "Google 계정이 아직 연결되지 않았습니다." });
   }
   if (!config?.clientId || !config?.clientSecret) {
-    return res.status(409).json({ error: "업로드한 Google OAuth 설정이 없습니다." });
+    return res.status(409).json({ error: "Google OAuth 설정을 찾지 못했습니다." });
   }
   const payload = {
     format: FORMAT,
