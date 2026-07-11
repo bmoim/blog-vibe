@@ -3,6 +3,7 @@ import { TOPIC_PLAN_SCHEMA } from "./topic-plan-schema.js";
 import { collectTopicSignals } from "./topic-signals.js";
 import { defaultTopicInputs, buildTopicPrompt } from "./topic-prompt.js";
 import { saveTopicPlan } from "./topic-plan-storage.js";
+import { appendActivity } from "./activity-history.js";
 
 function safeText(value, max = 2000) {
   return String(value || "").trim().slice(0, max);
@@ -88,5 +89,17 @@ export async function generateTopicPlan(body = {}) {
   } catch {
     throw new Error("주제 추천 데이터를 해석하지 못했습니다. 다시 생성해 주세요.");
   }
-  return saveTopicPlan(normalizePlan(parsed, count, input, searchSignals));
+  const plan = await saveTopicPlan(normalizePlan(parsed, count, input, searchSignals));
+  await appendActivity({
+    type: "topic-plan",
+    title: "한 달 블로그 주제 계획 생성",
+    query: input.pillars,
+    metadata: {
+      count: plan.topics?.length || count,
+      monthlyRevenueGoal: input.monthlyRevenueGoal,
+      searchConsoleSignals: searchSignals.length,
+      topTopics: (plan.topics || []).slice(0, 5).map((topic) => topic.title)
+    }
+  }).catch(() => null);
+  return plan;
 }
