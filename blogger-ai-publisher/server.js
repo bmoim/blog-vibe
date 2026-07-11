@@ -6,7 +6,7 @@ import session from "express-session";
 import sessionFileStore from "session-file-store";
 import sanitizeHtml from "sanitize-html";
 import { generateArticle, generateImages, polishArticle } from "./lib/openai-service.js";
-import { createGoogleAuthUrl, disconnectGoogle, handleGoogleCallback, isGoogleConnected, isGoogleConfigured, getGoogleConfigStatus, saveGoogleConfigFromJson, clearGoogleConfig, listBlogs, lookupBlogByUrl, publishPost, getGoogleRedirectUri } from "./lib/blogger-service.js";
+import { createGoogleAuthUrl, disconnectGoogle, handleGoogleCallback, isGoogleConnected, getGoogleConfigStatus, saveGoogleConfigFromJson, clearGoogleConfig, listBlogs, lookupBlogByUrl, publishPost, getGoogleRedirectUri } from "./lib/blogger-service.js";
 import { deleteDraft, getDailyUsage, getDraft, incrementDailyUsage, listDrafts, saveDraft, generatedDirectory, dataDirectory } from "./lib/storage.js";
 import { hostImages, imageHostConfigured } from "./lib/image-host.js";
 
@@ -17,6 +17,19 @@ const FileStore = sessionFileStore(session);
 
 app.set("trust proxy", 1);
 app.get("/health", (req, res) => res.json({ ok: true }));
+
+// Blogger, 검색엔진, 썸네일 수집기가 생성 이미지를 로그인 없이 읽을 수 있어야 한다.
+// 앱 화면과 API는 계속 Basic Auth로 보호하고 /generated 경로만 공개한다.
+app.use(
+  "/generated",
+  (req, res, next) => {
+    res.set("Cache-Control", "public, max-age=31536000, immutable");
+    res.set("Cross-Origin-Resource-Policy", "cross-origin");
+    res.set("Access-Control-Allow-Origin", "*");
+    next();
+  },
+  express.static(generatedDirectory, { maxAge: "1y", immutable: true, fallthrough: true })
+);
 
 function safeEqual(left, right) {
   const a = Buffer.from(String(left || ""));
@@ -63,7 +76,6 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use("/generated", express.static(generatedDirectory, { maxAge: "1h", fallthrough: true }));
 app.use(express.static(path.join(ROOT, "public"), { maxAge: 0, etag: true }));
 
 function safeText(value, max = 500) { return String(value || "").trim().slice(0, max); }
@@ -139,7 +151,7 @@ app.get("/api/status", async (req, res) => {
     googleConfigSource: googleConfig.source,
     googleConnected: await isGoogleConnected(),
     imageHostConfigured: imageHostConfigured(),
-    imageHostMode: process.env.IMAGE_HOST_MODE || "cloudinary",
+    imageHostMode: process.env.IMAGE_HOST_MODE || "public",
     textModel: process.env.OPENAI_TEXT_MODEL || "gpt-5.6",
     imageModel: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2",
     googleRedirectUri: getGoogleRedirectUri(),
