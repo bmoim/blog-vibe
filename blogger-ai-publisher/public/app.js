@@ -1,6 +1,7 @@
 const state = { status: null, currentDraft: null, blogs: [] };
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
+const SELECTED_BLOG_STORAGE_KEY = "blogger-ai-publisher:selected-blog-id";
 
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
@@ -31,6 +32,39 @@ function setBlogMessage(message, type = "muted") {
   element.className = `blog-connection-message ${type}`;
 }
 
+function getSelectedBlog() {
+  const id = String($("#blogSelect")?.value || "");
+  return state.blogs.find((blog) => String(blog.id) === id) || null;
+}
+
+function setShortcutLink(selector, href, enabled) {
+  const link = $(selector);
+  if (!link) return;
+  link.href = enabled ? href : "#";
+  link.classList.toggle("disabled", !enabled);
+  link.setAttribute("aria-disabled", enabled ? "false" : "true");
+  link.tabIndex = enabled ? 0 : -1;
+}
+
+function updateBloggerShortcuts() {
+  const blog = getSelectedBlog();
+  const label = $("#selectedBlogQuickLabel");
+  if (!blog) {
+    if (label) label.textContent = "블로그를 선택하면 글 관리와 설정으로 바로 이동할 수 있습니다.";
+    setShortcutLink("#bloggerPostsLink", "#", false);
+    setShortcutLink("#bloggerNewPostLink", "#", false);
+    setShortcutLink("#bloggerSettingsLink", "#", false);
+    setShortcutLink("#bloggerViewLink", "#", false);
+    return;
+  }
+  const id = encodeURIComponent(String(blog.id));
+  if (label) label.textContent = `${blog.name} 관리 메뉴`;
+  setShortcutLink("#bloggerPostsLink", `https://www.blogger.com/blog/posts/${id}`, true);
+  setShortcutLink("#bloggerNewPostLink", `https://www.blogger.com/blog/post/edit/${id}`, true);
+  setShortcutLink("#bloggerSettingsLink", `https://www.blogger.com/blog/settings/${id}`, true);
+  setShortcutLink("#bloggerViewLink", blog.url || "#", Boolean(blog.url));
+}
+
 function renderStatus() {
   const status = state.status;
   const googleSource = status.googleConfigSource === "uploaded" ? "앱 JSON 설정(우선)" : status.googleConfigSource === "environment" ? "Render 설정" : "OAuth JSON 등록 필요";
@@ -51,6 +85,7 @@ function renderStatus() {
     state.blogs = [];
     $("#blogSelect").innerHTML = '<option value="">Google 연결 후 선택</option>';
     setBlogMessage("Google 계정을 먼저 연결해 주세요.");
+    updateBloggerShortcuts();
   }
 }
 
@@ -68,7 +103,15 @@ function renderBlogOptions(selectedId = "") {
     const role = blog.role === "ADMIN" || blog.hasAdminAccess ? "관리자" : "작성자";
     return `<option value="${escapeHtml(blog.id)}">${escapeHtml(blog.name)} · ${role} · 글 ${Number(blog.postsTotal || 0)}개</option>`;
   }).join("");
-  if (selectedId && unique.has(String(selectedId))) select.value = String(selectedId);
+  const storedId = localStorage.getItem(SELECTED_BLOG_STORAGE_KEY) || "";
+  const candidate = String(selectedId || storedId || (state.blogs.length === 1 ? state.blogs[0].id : ""));
+  if (candidate && unique.has(candidate)) select.value = candidate;
+  if (select.value) {
+    localStorage.setItem(SELECTED_BLOG_STORAGE_KEY, select.value);
+    const selected = getSelectedBlog();
+    if (selected?.url && !$("#manualBlogUrl").value) $("#manualBlogUrl").value = selected.url;
+  }
+  updateBloggerShortcuts();
 }
 
 async function loadBlogs() {
@@ -103,6 +146,8 @@ async function connectBlogByUrl() {
     state.blogs = [...state.blogs.filter((item) => String(item.id) !== String(blog.id)), blog];
     renderBlogOptions(blog.id);
     $("#manualBlogUrl").value = blog.url || url;
+    localStorage.setItem(SELECTED_BLOG_STORAGE_KEY, String(blog.id));
+    updateBloggerShortcuts();
     const role = blog.hasAdminAccess ? "관리자" : "작성자";
     setBlogMessage(`연결 완료: ${blog.name} (${role}) · ${blog.url}`, "success");
     showToast(`${blog.name} 블로그를 발행 대상으로 연결했습니다.`);
@@ -215,6 +260,19 @@ $("#refreshDrafts").addEventListener("click", loadDrafts);
 $("#refreshBlogsButton").addEventListener("click", loadBlogs);
 $("#connectBlogByUrlButton").addEventListener("click", connectBlogByUrl);
 $("#manualBlogUrl").addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); connectBlogByUrl(); } });
+$("#blogSelect").addEventListener("change", () => {
+  const selected = getSelectedBlog();
+  if ($("#blogSelect").value) localStorage.setItem(SELECTED_BLOG_STORAGE_KEY, $("#blogSelect").value);
+  else localStorage.removeItem(SELECTED_BLOG_STORAGE_KEY);
+  if (selected?.url) $("#manualBlogUrl").value = selected.url;
+  updateBloggerShortcuts();
+});
+$$('.shortcut-link').forEach((link) => link.addEventListener('click', (event) => {
+  if (link.classList.contains('disabled')) {
+    event.preventDefault();
+    showToast("먼저 발행할 Blogger 블로그를 선택해 주세요.");
+  }
+}));
 $("#saveDraftButton").addEventListener("click", saveCurrentDraft);
 $("#publishDraftButton").addEventListener("click", () => publish(true));
 $("#publishLiveButton").addEventListener("click", () => publish(false));
@@ -223,6 +281,7 @@ $("#googleConfigButton").addEventListener("click", openGoogleSetup);
 $("#googleButton").addEventListener("click", async () => {
   if (state.status?.googleConnected) {
     await api("/api/google/disconnect", { method: "POST", body: "{}" });
+    localStorage.removeItem(SELECTED_BLOG_STORAGE_KEY);
     await loadStatus();
     showToast("Google 연결을 해제했습니다.");
   } else if (!state.status?.googleConfigured) {
@@ -242,6 +301,7 @@ $("#draftList").addEventListener("click", async (event) => {
   }
 });
 
+updateBloggerShortcuts();
 Promise.all([loadStatus(), loadDrafts()]).catch((error) => showToast(error.message, 7000));
 const params = new URLSearchParams(location.search);
 if (params.get("google") === "connected") {
