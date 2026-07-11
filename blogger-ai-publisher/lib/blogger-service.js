@@ -96,37 +96,15 @@ function mapBlog(blog, role = "AUTHOR") {
   };
 }
 
-function mergeBlogs(target, items, role) {
-  for (const blog of items || []) {
-    if (!blog?.id) continue;
-    const mapped = mapBlog(blog, role);
-    const existing = target.get(mapped.id);
-    if (!existing || role === "ADMIN") target.set(mapped.id, mapped);
-  }
-}
-
 export async function listBlogs() {
   const blogger = google.blogger({ version: "v3", auth: await authorizedClient() });
-  const found = new Map();
-  const attempts = [
-    { fetchUserInfo: true },
-    { fetchUserInfo: true, view: "ADMIN" },
-    { fetchUserInfo: true, view: "AUTHOR" }
-  ];
-  let lastError = null;
-  for (const attempt of attempts) {
-    try {
-      const response = await blogger.blogs.listByUser({ userId: "self", ...attempt });
-      mergeBlogs(found, response.data.items, attempt.view || "AUTHOR");
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  if (!found.size && lastError) {
-    const message = lastError?.response?.data?.error?.message || lastError.message;
+  try {
+    const response = await blogger.blogs.listByUser({ userId: "self", fetchUserInfo: true });
+    return (response.data.items || []).map((blog) => mapBlog(blog, "AUTHOR")).sort((a, b) => a.name.localeCompare(b.name, "ko"));
+  } catch (error) {
+    const message = error?.response?.data?.error?.message || error.message || "알 수 없는 오류";
     throw new Error(`Blogger 블로그 목록을 불러오지 못했습니다: ${message}`);
   }
-  return [...found.values()].sort((a, b) => a.name.localeCompare(b.name, "ko"));
 }
 
 function normalizeBlogUrl(value) {
