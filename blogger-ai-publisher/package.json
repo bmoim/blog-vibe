@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "node --watch --import ./lib/growth-bootstrap.js server.js",
     "start": "npm run check && node --import ./lib/growth-bootstrap.js server.js",
-    "check": "node --check server.js && node --check lib/openai-service.js && node --check lib/blogger-service.js && node --check lib/storage.js && node --check lib/image-host.js && node --check lib/growth-storage.js && node --check lib/growth-router.js && node --check lib/growth-backup-router.js && node --check lib/growth-bootstrap.js && node --check public/generation-enhancements.js && node --check public/growth.js && node --check public/growth-backup-ui.js && node --check public/thumbnail-ui.js"
+    "check": "node --check server.js && node --check lib/openai-service.js && node --check lib/blogger-service.js && node --check lib/storage.js && node --check lib/image-host.js && node --check lib/growth-storage.js && node --check lib/growth-router.js && node --check lib/growth-backup-router.js && node --check lib/published-update-router.js && node --check lib/growth-bootstrap.js && node --check public/generation-enhancements.js && node --check public/growth.js && node --check public/growth-backup-ui.js && node --check public/published-update-ui.js && node --check public/thumbnail-ui.js"
   },
   "engines": {
     "node": ">=20"
