@@ -58,3 +58,5 @@ if (topActions) {
 
   topActions.append(download, restore, input);
 }
+
+import("/site-health-ui.js?v=20260711-10").catch((error) => console.error("사이트 상태 UI를 불러오지 못했습니다.", error));
