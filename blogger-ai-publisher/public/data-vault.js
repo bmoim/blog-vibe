@@ -132,10 +132,14 @@ async function restoreIfServerWasReset(status) {
   const vault = await readVault();
   if (!vault?.bundle || Number(vault.totalRecords || bundleRecordCount(vault.bundle)) <= 0) return false;
   sessionStorage.setItem(RESTORE_SESSION_KEY, "1");
-  await requestJson("/api/growth/persistence/import", {
+  const response = await fetch("/api/growth/persistence/import", {
     method: "POST",
+    cache: "no-store",
+    headers: { "Content-Type": "application/octet-stream" },
     body: JSON.stringify({ bundle: vault.bundle })
   });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "브라우저 백업 복원에 실패했습니다.");
   location.reload();
   return true;
 }
