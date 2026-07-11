@@ -70,8 +70,9 @@ async function syncNow() {
   loading(true);
   try {
     const data = await api("/api/growth/persistence/sync", { method: "POST", body: "{}" });
+    if (typeof window.blogDataVaultSave === "function") await window.blogDataVaultSave();
     renderStatus(data.status);
-    toast(data.status.databaseConnected ? "최신 데이터를 PostgreSQL에 영구 저장했습니다." : "최신 데이터를 이 브라우저의 자동 백업 대상으로 저장했습니다.");
+    toast(data.status.databaseConnected ? "최신 데이터를 PostgreSQL에 영구 저장했습니다." : "최신 데이터를 이 브라우저에 즉시 백업했습니다.");
   } catch (error) {
     toast(error.message, 10000);
   } finally {
