@@ -1,36 +1,60 @@
 import crypto from "node:crypto";
 import { google } from "googleapis";
-import { readGoogleToken, saveGoogleToken, removeGoogleToken } from "./storage.js";
+import { readGoogleToken, saveGoogleToken, removeGoogleToken, readGoogleOAuthConfig, saveGoogleOAuthConfig, removeGoogleOAuthConfig } from "./storage.js";
 
 const SCOPES = ["https://www.googleapis.com/auth/blogger"];
-function assertGoogleConfig() { if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) throw new Error("GOOGLE_CLIENT_ID와 GOOGLE_CLIENT_SECRET이 설정되지 않았습니다."); }
 function cleanBaseUrl(value) { return String(value || "").replace(/\/+$/, ""); }
 export function getGoogleRedirectUri() {
   if (process.env.GOOGLE_REDIRECT_URI) return process.env.GOOGLE_REDIRECT_URI;
   const deployedBase = cleanBaseUrl(process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_BASE_URL);
   return deployedBase ? `${deployedBase}/auth/google/callback` : "http://localhost:3000/auth/google/callback";
 }
-function createOAuthClient() { assertGoogleConfig(); return new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, getGoogleRedirectUri()); }
+async function getGoogleConfig() {
+  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) return { clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET, source: "environment" };
+  const stored = await readGoogleOAuthConfig();
+  if (stored?.clientId && stored?.clientSecret) return { ...stored, source: "uploaded" };
+  return null;
+}
+export async function isGoogleConfigured() { return Boolean(await getGoogleConfig()); }
+export async function getGoogleConfigStatus() { const config = await getGoogleConfig(); return config ? { configured: true, source: config.source, clientIdHint: `${config.clientId.slice(0, 12)}…` } : { configured: false, source: null, clientIdHint: null }; }
+export async function saveGoogleConfigFromJson(input) {
+  let parsed;
+  try { parsed = typeof input === "string" ? JSON.parse(input) : input; } catch { throw new Error("Google OAuth JSON 파일 형식이 올바르지 않습니다."); }
+  const web = parsed?.web || parsed?.installed || parsed;
+  const clientId = String(web?.client_id || web?.clientId || "").trim();
+  const clientSecret = String(web?.client_secret || web?.clientSecret || "").trim();
+  if (!clientId || !clientSecret) throw new Error("JSON 파일에서 client_id와 client_secret을 찾지 못했습니다.");
+  if (!clientId.endsWith(".apps.googleusercontent.com")) throw new Error("올바른 Google OAuth 클라이언트 ID가 아닙니다.");
+  await saveGoogleOAuthConfig({ clientId, clientSecret, savedAt: new Date().toISOString() });
+  await removeGoogleToken();
+  return { configured: true, source: "uploaded", clientIdHint: `${clientId.slice(0, 12)}…` };
+}
+export async function clearGoogleConfig() { await removeGoogleToken(); await removeGoogleOAuthConfig(); }
+async function createOAuthClient() {
+  const config = await getGoogleConfig();
+  if (!config) throw new Error("Google OAuth 설정이 없습니다. 프로그램에서 Google OAuth JSON 파일을 등록해 주세요.");
+  return new google.auth.OAuth2(config.clientId, config.clientSecret, getGoogleRedirectUri());
+}
 async function authorizedClient() {
   const token = await readGoogleToken(); if (!token) throw new Error("Google 계정 연결이 필요합니다.");
-  const client = createOAuthClient(); client.setCredentials(token);
+  const client = await createOAuthClient(); client.setCredentials(token);
   client.on("tokens", async (newTokens) => saveGoogleToken({ ...token, ...newTokens }));
   return client;
 }
-export function createGoogleAuthUrl(session) {
-  const client = createOAuthClient(); const state = crypto.randomBytes(24).toString("hex"); session.googleOAuthState = state;
+export async function createGoogleAuthUrl(session) {
+  const client = await createOAuthClient(); const state = crypto.randomBytes(24).toString("hex"); session.googleOAuthState = state;
   return client.generateAuthUrl({ access_type: "offline", prompt: "consent", scope: SCOPES, state, include_granted_scopes: true });
 }
 export async function handleGoogleCallback(code, state, session) {
   if (!code) throw new Error("Google 인증 코드가 없습니다.");
   if (!state || state !== session.googleOAuthState) throw new Error("Google 로그인 상태값이 일치하지 않습니다. 다시 연결해 주세요.");
-  delete session.googleOAuthState; const client = createOAuthClient(); const { tokens } = await client.getToken(code);
+  delete session.googleOAuthState; const client = await createOAuthClient(); const { tokens } = await client.getToken(code);
   await saveGoogleToken({ ...(await readGoogleToken()), ...tokens });
 }
 export async function isGoogleConnected() { const token = await readGoogleToken(); return Boolean(token?.access_token || token?.refresh_token); }
 export async function disconnectGoogle() {
   const token = await readGoogleToken();
-  if (token) try { const client = createOAuthClient(); client.setCredentials(token); if (token.access_token) await client.revokeToken(token.access_token); } catch {}
+  if (token) try { const client = await createOAuthClient(); client.setCredentials(token); if (token.access_token) await client.revokeToken(token.access_token); } catch {}
   await removeGoogleToken();
 }
 export async function listBlogs() {
