@@ -7,11 +7,13 @@ import { dataDirectory, generatedDirectory } from "./storage.js";
 const router = express.Router();
 const DATA_FILES = [
   "drafts.json",
+  "usage.json",
   "growth-settings.json",
   "growth-schedules.json",
   "draft-versions.json",
   "growth-monitor.json",
-  "topic-plans.json"
+  "topic-plans.json",
+  "activity-history.json"
 ];
 
 async function readOptional(file) {
