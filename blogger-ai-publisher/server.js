@@ -54,8 +54,17 @@ app.use(session({
   saveUninitialized: false,
   cookie: { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: 1000 * 60 * 60 }
 }));
+app.use((req, res, next) => {
+  if (req.path === "/" || /\.(?:html|js|css)$/i.test(req.path)) {
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.set("Surrogate-Control", "no-store");
+    res.set("Pragma", "no-cache");
+    res.set("Expires", "0");
+  }
+  next();
+});
 app.use("/generated", express.static(generatedDirectory, { maxAge: "1h", fallthrough: true }));
-app.use(express.static(path.join(ROOT, "public"), { maxAge: "1h" }));
+app.use(express.static(path.join(ROOT, "public"), { maxAge: 0, etag: true }));
 
 function safeText(value, max = 500) { return String(value || "").trim().slice(0, max); }
 
