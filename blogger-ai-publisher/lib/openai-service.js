@@ -17,14 +17,49 @@ function getClient() {
   if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY가 설정되지 않았습니다.");
   return new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
-    timeout: Number(process.env.OPENAI_TIMEOUT_MS || 360000),
-    maxRetries: 1
+    timeout: Number(process.env.OPENAI_TIMEOUT_MS || 540000),
+    maxRetries: 2
   });
 }
-function textModel() {
+
+function configuredTextModel() {
   const configured = String(process.env.OPENAI_TEXT_MODEL || "gpt-5.6").trim();
   return configured === "gpt-5.6-terra" ? "gpt-5.6" : configured;
 }
+
+function textModel(requested) {
+  const candidate = String(requested || configuredTextModel()).trim();
+  const blocked = /(audio|realtime|transcribe|tts|image|search|codex|embedding|moderation)/i;
+  if (/^gpt-5(?:[.\w-]*)?$/i.test(candidate) && !blocked.test(candidate)) return candidate;
+  return configuredTextModel();
+}
+
+export async function listAvailableTextModels() {
+  const fallback = configuredTextModel();
+  try {
+    const page = await getClient().models.list();
+    const ids = (page.data || [])
+      .map((model) => String(model.id || ""))
+      .filter((id) => /^gpt-5(?:[.\w-]*)?$/i.test(id))
+      .filter((id) => !/(audio|realtime|transcribe|tts|image|search|codex|embedding|moderation)/i.test(id))
+      .filter((id) => !/-\d{4}-\d{2}-\d{2}$/.test(id));
+    const unique = [...new Set([fallback, ...ids])];
+    return unique.sort((a, b) => {
+      if (a === fallback) return -1;
+      if (b === fallback) return 1;
+      return b.localeCompare(a, "en", { numeric: true });
+    });
+  } catch {
+    return [fallback];
+  }
+}
+
+function koreaDate() {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 function clamp(value, min, max) { const number = Number(value); return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : min; }
 function normalizeArticle(article, imageCount) {
   const normalized = {
@@ -44,33 +79,56 @@ function normalizeArticle(article, imageCount) {
   }
   return normalized;
 }
-function articlePrompt({ topic, targetKeyword, audience, tone, language, articleLength, imageCount, customInstructions, useWebResearch }) {
-  return `당신은 검색 사용자의 문제를 실제로 해결하는 전문 편집자다. 아래 조건으로 Blogger에 바로 넣을 수 있는 고품질 글을 작성하라.\n\n[입력]\n- 주제: ${topic}\n- 핵심 키워드: ${targetKeyword || topic}\n- 독자: ${audience || "일반 독자"}\n- 문체: ${tone || "신뢰감 있고 쉽게 설명하는 문체"}\n- 언어: ${language || "한국어"}\n- 목표 분량: 약 ${articleLength}자\n- 본문 이미지 수: ${imageCount}개\n- 추가 지시: ${customInstructions || "없음"}\n- 최신 자료 조사: ${useWebResearch ? "필수" : "불필요"}\n\n[품질 원칙]\n1. 검색 의도를 첫 문단에서 바로 해결하고 반복을 피한다.\n2. 경험·비교·체크리스트·실행 단계처럼 바로 활용할 고유한 가치를 넣는다.\n3. 제목은 과장 없이 구체적으로 작성하고 핵심 키워드를 자연스럽게 포함한다.\n4. body_html은 완성된 HTML 조각이다. h1은 쓰지 말고 h2, h3, p, ul, ol, table, blockquote, strong, a를 사용한다.\n5. 이미지 위치에는 정확히 {{IMAGE_1}} 형식의 마커를 각각 한 번만 넣는다.\n6. 이미지 프롬프트에는 글자, 로고, 워터마크를 넣지 말고 16:9 블로그 이미지 구도와 조명을 구체적으로 쓴다.\n7. 웹 조사를 했다면 sources에 실제 확인한 신뢰도 높은 URL만 넣는다.\n8. 건강·법률·세무·보험·투자 주제는 단정하지 말고 risk_notice에 주의 문구를 쓴다.\n9. 존재하지 않는 통계, 기관, 법령, 사양, 인용문을 만들지 않는다.\n10. 상투적 자동생성 문구, 키워드 반복, 애드센스 클릭 유도를 금지한다.\n11. FAQ는 실제 후속 질문 중심으로 쓴다.\n12. 메타 설명은 약 80~155자, 제목은 가능하면 28~60자다.\n\n반드시 지정된 JSON 스키마만 반환하라.`;
+
+function freshnessRules(currentDate) {
+  return `\n[현재 시점과 최신성 규칙]\n- 오늘 날짜는 대한민국 시간 기준 ${currentDate}이다.\n- "현재", "오늘", "올해", "최근", "최신"은 반드시 ${currentDate}를 기준으로 해석한다.\n- 가격, 지원금, 신청 기간, 법령, 제도, 제품 사양, 인물·직책, 의료·금융 정보처럼 바뀔 수 있는 사실은 웹 검색으로 지금 유효한지 확인한다.\n- 오래된 자료를 현재 정보처럼 쓰지 않는다. 2025년 등 과거 날짜는 역사적 비교가 필요할 때만 그 날짜를 명확히 밝힌다.\n- 가능하면 공식 기관·제조사·정부·원문 자료를 우선하고, 자료의 게시일 또는 갱신일도 확인한다.\n- 최신 정보가 확인되지 않으면 임의로 채우지 말고 확인 방법과 불확실성을 명시한다.\n- 제목이나 본문에 "2025년 기준"처럼 오래된 기준일을 현재 기준으로 잘못 제시하지 않는다.`;
 }
+
+function articlePrompt({ topic, targetKeyword, audience, tone, language, articleLength, imageCount, customInstructions, currentDate }) {
+  return `당신은 검색 사용자의 문제를 실제로 해결하는 전문 편집자다. 아래 조건으로 Blogger에 바로 넣을 수 있는 고품질 글을 작성하라.\n\n[입력]\n- 주제: ${topic}\n- 핵심 키워드: ${targetKeyword || topic}\n- 독자: ${audience || "일반 독자"}\n- 문체: ${tone || "신뢰감 있고 쉽게 설명하는 문체"}\n- 언어: ${language || "한국어"}\n- 목표 분량: 약 ${articleLength}자\n- 본문 이미지 수: ${imageCount}개\n- 추가 지시: ${customInstructions || "없음"}\n${freshnessRules(currentDate)}\n\n[품질 원칙]\n1. 검색 의도를 첫 문단에서 바로 해결하고 반복을 피한다.\n2. 경험·비교·체크리스트·실행 단계처럼 바로 활용할 고유한 가치를 넣는다.\n3. 제목은 과장 없이 구체적으로 작성하고 핵심 키워드를 자연스럽게 포함한다.\n4. body_html은 완성된 HTML 조각이다. h1은 쓰지 말고 h2, h3, p, ul, ol, table, blockquote, strong, a를 사용한다.\n5. 이미지 위치에는 정확히 {{IMAGE_1}} 형식의 마커를 각각 한 번만 넣는다.\n6. 이미지 프롬프트에는 글자, 로고, 워터마크를 넣지 말고 16:9 블로그 이미지 구도와 조명을 구체적으로 쓴다.\n7. sources에는 이번 검색에서 실제 확인한 신뢰도 높은 URL만 넣는다.\n8. 건강·법률·세무·보험·투자 주제는 단정하지 말고 risk_notice에 주의 문구를 쓴다.\n9. 존재하지 않는 통계, 기관, 법령, 사양, 인용문을 만들지 않는다.\n10. 상투적 자동생성 문구, 키워드 반복, 애드센스 클릭 유도를 금지한다.\n11. FAQ는 실제 후속 질문 중심으로 쓴다.\n12. 메타 설명은 약 80~155자, 제목은 가능하면 28~60자다.\n\n반드시 지정된 JSON 스키마만 반환하라.`;
+}
+
 export async function generateArticle(options) {
-  const client = getClient(); const imageCount = clamp(options.imageCount, 0, 4); const articleLength = clamp(options.articleLength, 1200, 12000); const useWebResearch = Boolean(options.useWebResearch);
+  const client = getClient();
+  const imageCount = clamp(options.imageCount, 0, 4);
+  const articleLength = clamp(options.articleLength, 1200, 12000);
+  const currentDate = options.currentDate || koreaDate();
   const request = {
-    model: textModel(),
+    model: textModel(options.textModel),
     reasoning: { effort: "low" },
-    instructions: "정확성, 유용성, 독창성, 사람의 최종 검수를 우선하는 편집 시스템이다.",
-    input: articlePrompt({ ...options, imageCount, articleLength, useWebResearch }),
+    instructions: `정확성, 최신성, 유용성, 독창성, 사람의 최종 검수를 우선하는 편집 시스템이다. 오늘은 대한민국 시간 기준 ${currentDate}다.`,
+    input: articlePrompt({ ...options, imageCount, articleLength, currentDate }),
     max_output_tokens: 12000,
-    text: { format: { type: "json_schema", name: "blog_article", strict: true, schema: ARTICLE_SCHEMA } }
+    text: { format: { type: "json_schema", name: "blog_article", strict: true, schema: ARTICLE_SCHEMA } },
+    tools: [{ type: "web_search", search_context_size: "medium" }],
+    tool_choice: "required"
   };
-  if (useWebResearch) { request.tools = [{ type: "web_search", search_context_size: "low" }]; request.tool_choice = "required"; }
-  const response = await client.responses.create(request); if (!response.output_text) throw new Error("글 생성 결과가 비어 있습니다.");
-  try { return normalizeArticle(JSON.parse(response.output_text), imageCount); } catch { throw new Error("AI가 반환한 글 데이터를 해석하지 못했습니다. 다시 생성해 주세요."); }
+  const response = await client.responses.create(request);
+  if (!response.output_text) throw new Error("글 생성 결과가 비어 있습니다.");
+  try { return normalizeArticle(JSON.parse(response.output_text), imageCount); }
+  catch { throw new Error("AI가 반환한 글 데이터를 해석하지 못했습니다. 다시 생성해 주세요."); }
 }
+
 export async function polishArticle(article, options) {
+  const currentDate = options.currentDate || koreaDate();
+  const reviewMode = options.premiumReview
+    ? "최신성 검증과 함께 중복, 문장 품질, 구조, 검색 의도까지 엄격하게 개선한다."
+    : "문장 구조는 가능한 유지하되 최신성·사실 정확성만 반드시 검증하고 수정한다.";
   const response = await getClient().responses.create({
-    model: textModel(), reasoning: { effort: "low" },
-    instructions: "실제 독자에게 도움이 되는 글만 통과시키는 엄격한 편집장이다.",
-    input: `다음 글 JSON을 검수하고 개선하라. 불확실한 내용은 삭제하거나 신중하게 고치고 출처 URL과 이미지 마커를 보존하라. 목표 언어는 ${options.language || "한국어"}다.\n\n${JSON.stringify(article)}`,
+    model: textModel(options.textModel),
+    reasoning: { effort: "low" },
+    instructions: `실제 독자에게 도움이 되는 글만 통과시키는 최신성 검증 편집장이다. 오늘은 대한민국 시간 기준 ${currentDate}다.`,
+    input: `다음 글 JSON을 웹 검색으로 다시 검증하고 개선하라. ${reviewMode}\n불확실하거나 현재와 맞지 않는 내용은 삭제·수정하고, 최신 공식 출처 URL로 sources를 갱신하며 이미지 마커를 보존하라.${freshnessRules(currentDate)}\n목표 언어는 ${options.language || "한국어"}다.\n\n${JSON.stringify(article)}`,
     max_output_tokens: 12000,
-    text: { format: { type: "json_schema", name: "polished_blog_article", strict: true, schema: ARTICLE_SCHEMA } }
+    text: { format: { type: "json_schema", name: "fresh_blog_article", strict: true, schema: ARTICLE_SCHEMA } },
+    tools: [{ type: "web_search", search_context_size: "medium" }],
+    tool_choice: "required"
   });
-  if (!response.output_text) return article; try { return normalizeArticle(JSON.parse(response.output_text), article.image_prompts.length); } catch { return article; }
+  if (!response.output_text) return article;
+  try { return normalizeArticle(JSON.parse(response.output_text), article.image_prompts.length); }
+  catch { return article; }
 }
+
 export async function generateImages(imagePrompts) {
   const client = getClient(); const model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2";
   return Promise.all(imagePrompts.map(async (item, index) => {
