@@ -1,0 +1,49 @@
+name: Blogger AI Publisher Check
+
+on:
+  push:
+    branches:
+      - blogger-ai-publisher
+    paths:
+      - "blogger-ai-publisher/**"
+      - ".github/workflows/blogger-ai-check.yml"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: blogger-ai-publisher
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: blogger-ai-publisher/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Syntax checks
+        run: npm run check
+      - name: Startup smoke test
+        env:
+          PORT: 3099
+          APP_PASSWORD: ci-test-password
+          SESSION_SECRET: ci-test-session-secret
+          NODE_ENV: test
+        run: |
+          npm start > /tmp/blogger-ai-publisher.log 2>&1 &
+          APP_PID=$!
+          trap 'kill $APP_PID || true' EXIT
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:3099/health >/dev/null; then
+              cat /tmp/blogger-ai-publisher.log
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/blogger-ai-publisher.log
+          exit 1
