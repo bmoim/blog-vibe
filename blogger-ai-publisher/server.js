@@ -6,7 +6,7 @@ import session from "express-session";
 import sessionFileStore from "session-file-store";
 import sanitizeHtml from "sanitize-html";
 import { generateArticle, generateImages, polishArticle } from "./lib/openai-service.js";
-import { createGoogleAuthUrl, disconnectGoogle, handleGoogleCallback, isGoogleConnected, listBlogs, publishPost, getGoogleRedirectUri } from "./lib/blogger-service.js";
+import { createGoogleAuthUrl, disconnectGoogle, handleGoogleCallback, isGoogleConnected, isGoogleConfigured, getGoogleConfigStatus, saveGoogleConfigFromJson, clearGoogleConfig, listBlogs, publishPost, getGoogleRedirectUri } from "./lib/blogger-service.js";
 import { deleteDraft, getDailyUsage, getDraft, incrementDailyUsage, listDrafts, saveDraft, generatedDirectory, dataDirectory } from "./lib/storage.js";
 import { hostImages, imageHostConfigured } from "./lib/image-host.js";
 
@@ -45,7 +45,7 @@ function requireAppAuth(req, res, next) {
 }
 
 app.use(requireAppAuth);
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "3mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
   store: new FileStore({ path: path.join(dataDirectory, "sessions"), retries: 1, logFn: () => {} }),
@@ -123,9 +123,11 @@ function withPreview(draft) {
 app.get("/api/status", async (req, res) => {
   const usage = await getDailyUsage();
   const dailyLimit = Math.max(1, Number(process.env.DAILY_GENERATION_LIMIT || 10));
+  const googleConfig = await getGoogleConfigStatus();
   res.json({
     openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
-    googleConfigured: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    googleConfigured: googleConfig.configured,
+    googleConfigSource: googleConfig.source,
     googleConnected: await isGoogleConnected(),
     imageHostConfigured: imageHostConfigured(),
     imageHostMode: process.env.IMAGE_HOST_MODE || "cloudinary",
@@ -137,7 +139,18 @@ app.get("/api/status", async (req, res) => {
   });
 });
 
-app.get("/auth/google", (req, res) => res.redirect(createGoogleAuthUrl(req.session)));
+app.get("/api/google/config", async (req, res) => res.json(await getGoogleConfigStatus()));
+app.post("/api/google/config", async (req, res) => {
+  const oauthJson = req.body?.oauthJson;
+  if (!oauthJson) return res.status(400).json({ error: "Google OAuth JSON 파일 내용이 없습니다." });
+  const result = await saveGoogleConfigFromJson(oauthJson);
+  res.json(result);
+});
+app.delete("/api/google/config", async (req, res) => { await clearGoogleConfig(); res.json({ ok: true }); });
+
+app.get("/auth/google", async (req, res, next) => {
+  try { res.redirect(await createGoogleAuthUrl(req.session)); } catch (error) { next(error); }
+});
 app.get("/auth/google/callback", async (req, res) => {
   try { await handleGoogleCallback(req.query.code, req.query.state, req.session); res.redirect("/?google=connected"); }
   catch (error) { res.redirect(`/?google=error&message=${encodeURIComponent(error.message)}`); }
