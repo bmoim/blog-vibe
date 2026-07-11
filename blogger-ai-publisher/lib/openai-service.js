@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { saveGeneratedImage } from "./storage.js";
+import { cleanArticleOutput } from "./article-cleanup.js";
 
 const ARTICLE_SCHEMA = {
   type: "object", additionalProperties: false,
@@ -71,7 +72,8 @@ function defaultThumbnailPrompt(article) {
   };
 }
 
-function normalizeArticle(article, bodyImageCount) {
+function normalizeArticle(rawArticle, bodyImageCount) {
+  const article = cleanArticleOutput(rawArticle);
   const desiredTotal = clamp(bodyImageCount, 0, 4) + 1;
   const prompts = Array.isArray(article.image_prompts) ? article.image_prompts.slice(0, desiredTotal) : [];
   if (!prompts.length) prompts.push(defaultThumbnailPrompt(article));
@@ -108,7 +110,7 @@ function freshnessRules(currentDate) {
 }
 
 function articlePrompt({ topic, targetKeyword, audience, tone, language, articleLength, imageCount, customInstructions, currentDate }) {
-  return `당신은 검색 사용자의 문제를 실제로 해결하는 전문 편집자다. 아래 조건으로 Blogger에 바로 넣을 수 있는 고품질 글을 작성하라.\n\n[입력]\n- 주제: ${topic}\n- 핵심 키워드: ${targetKeyword || topic}\n- 독자: ${audience || "일반 독자"}\n- 문체: ${tone || "신뢰감 있고 쉽게 설명하는 문체"}\n- 언어: ${language || "한국어"}\n- 목표 분량: 약 ${articleLength}자\n- 본문 이미지 수: ${imageCount}개\n- 별도 대표 썸네일: 1:1 정사각형 1장 필수\n- 추가 지시: ${customInstructions || "없음"}\n${freshnessRules(currentDate)}\n\n[품질 원칙]\n1. 검색 의도를 첫 문단에서 바로 해결하고 반복을 피한다.\n2. 경험·비교·체크리스트·실행 단계처럼 바로 활용할 고유한 가치를 넣는다.\n3. 제목은 과장 없이 구체적으로 작성하고 핵심 키워드를 자연스럽게 포함한다.\n4. body_html은 완성된 HTML 조각이다. h1은 쓰지 말고 h2, h3, p, ul, ol, table, blockquote, strong, a를 사용한다.\n5. image_prompts의 첫 번째 항목은 반드시 1:1 대표 썸네일용 프롬프트다. 나머지 항목만 본문 이미지다. 전체 image_prompts 수는 ${imageCount + 1}개다.\n6. 대표 썸네일 프롬프트는 다음 고정 디자인을 구체적으로 포함한다: 화이트 또는 연한 그레이 배경, 진한 블루~보라 포인트, 왼쪽의 매우 큰 한국어 제목, 왼쪽 상단 둥근 배지, 오른쪽 상단의 주제 대표 실사 비주얼, 제목 아래 얇은 구분선, 하단의 라운드 카드 3개, 맨 아래 아이콘형 요약 4개. 고급스럽고 깔끔한 한국 블로그 인포그래픽 디자인, 1:1 정사각형.\n7. 대표 썸네일 프롬프트에는 최종 제목을 정확한 한국어 메인 헤드라인으로 넣고, 본문에서 검증된 핵심 내용만 카드 문구로 사용한다. 가격·날짜·수치가 확인되지 않았다면 임의로 넣지 않는다. alt에는 반드시 '대표 썸네일'이라는 단어를 포함한다.\n8. body_html의 가장 첫 부분에 대표 썸네일 위치인 {{IMAGE_1}}을 정확히 한 번 넣는다. 본문 이미지 마커는 {{IMAGE_2}}부터 순서대로 각각 한 번 넣는다.\n9. 본문 이미지 프롬프트에는 글자, 로고, 워터마크를 넣지 말고 16:9 블로그 이미지 구도와 조명을 구체적으로 쓴다.\n10. sources에는 이번 검색에서 실제 확인한 신뢰도 높은 URL만 넣는다.\n11. 건강·법률·세무·보험·투자 주제는 단정하지 말고 risk_notice에 주의 문구를 쓴다.\n12. 존재하지 않는 통계, 기관, 법령, 사양, 인용문을 만들지 않는다.\n13. 상투적 자동생성 문구, 키워드 반복, 애드센스 클릭 유도를 금지한다.\n14. FAQ는 실제 후속 질문 중심으로 쓴다.\n15. 메타 설명은 약 80~155자, 제목은 가능하면 28~60자다.\n\n반드시 지정된 JSON 스키마만 반환하라.`;
+  return `당신은 검색 사용자의 문제를 실제로 해결하는 전문 편집자다. 아래 조건으로 Blogger에 바로 넣을 수 있는 고품질 글을 작성하라.\n\n[입력]\n- 주제: ${topic}\n- 핵심 키워드: ${targetKeyword || topic}\n- 독자: ${audience || "일반 독자"}\n- 문체: ${tone || "신뢰감 있고 쉽게 설명하는 문체"}\n- 언어: ${language || "한국어"}\n- 목표 분량: 약 ${articleLength}자\n- 본문 이미지 수: ${imageCount}개\n- 별도 대표 썸네일: 1:1 정사각형 1장 필수\n- 추가 지시: ${customInstructions || "없음"}\n${freshnessRules(currentDate)}\n\n[품질 원칙]\n1. 검색 의도를 첫 문단에서 바로 해결하고 반복을 피한다.\n2. 경험·비교·체크리스트·실행 단계처럼 바로 활용할 고유한 가치를 넣는다.\n3. 제목은 과장 없이 구체적으로 작성하고 핵심 키워드를 자연스럽게 포함한다.\n4. body_html은 완성된 HTML 조각이다. h1은 쓰지 말고 h2, h3, p, ul, ol, table, blockquote, strong, a를 사용한다.\n5. image_prompts의 첫 번째 항목은 반드시 1:1 대표 썸네일용 프롬프트다. 나머지 항목만 본문 이미지다. 전체 image_prompts 수는 ${imageCount + 1}개다.\n6. 대표 썸네일 프롬프트는 다음 고정 디자인을 구체적으로 포함한다: 화이트 또는 연한 그레이 배경, 진한 블루~보라 포인트, 왼쪽의 매우 큰 한국어 제목, 왼쪽 상단 둥근 배지, 오른쪽 상단의 주제 대표 실사 비주얼, 제목 아래 얇은 구분선, 하단의 라운드 카드 3개, 맨 아래 아이콘형 요약 4개. 고급스럽고 깔끔한 한국 블로그 인포그래픽 디자인, 1:1 정사각형.\n7. 대표 썸네일 프롬프트에는 최종 제목을 정확한 한국어 메인 헤드라인으로 넣고, 본문에서 검증된 핵심 내용만 카드 문구로 사용한다. 가격·날짜·수치가 확인되지 않았다면 임의로 넣지 않는다. alt에는 반드시 '대표 썸네일'이라는 단어를 포함한다.\n8. body_html의 가장 첫 부분에 대표 썸네일 위치인 {{IMAGE_1}}을 정확히 한 번 넣는다. 본문 이미지 마커는 {{IMAGE_2}}부터 순서대로 각각 한 번 넣는다.\n9. 본문 이미지 프롬프트에는 글자, 로고, 워터마크를 넣지 말고 16:9 블로그 이미지 구도와 조명을 구체적으로 쓴다.\n10. sources에는 이번 검색에서 실제 확인한 신뢰도 높은 URL만 넣는다. 본문 문장 끝에 마크다운 링크, 괄호형 링크, 출처 도메인, utm_source=openai 같은 추적 주소를 절대 넣지 않는다. 출처는 sources 배열에만 기록한다.\n11. 건강·법률·세무·보험·투자 주제는 단정하지 말고 risk_notice에 주의 문구를 쓴다.\n12. 존재하지 않는 통계, 기관, 법령, 사양, 인용문을 만들지 않는다.\n13. 상투적 자동생성 문구, 키워드 반복, 애드센스 클릭 유도를 금지한다.\n14. FAQ는 실제 후속 질문 중심으로 쓴다.\n15. 메타 설명은 약 80~155자, 제목은 가능하면 28~60자다.\n\n반드시 지정된 JSON 스키마만 반환하라.`;
 }
 
 export async function generateArticle(options) {
@@ -141,15 +143,15 @@ export async function polishArticle(article, options) {
     model: textModel(options.textModel),
     reasoning: { effort: "low" },
     instructions: `실제 독자에게 도움이 되는 글만 통과시키는 최신성 검증 편집장이다. 오늘은 대한민국 시간 기준 ${currentDate}다.`,
-    input: `다음 글 JSON을 웹 검색으로 다시 검증하고 개선하라. ${reviewMode}\n불확실하거나 현재와 맞지 않는 내용은 삭제·수정하고, 최신 공식 출처 URL로 sources를 갱신하며 이미지 마커를 보존하라. image_prompts 첫 항목의 1:1 대표 썸네일 디자인 지시와 {{IMAGE_1}} 위치도 반드시 보존하라.${freshnessRules(currentDate)}\n목표 언어는 ${options.language || "한국어"}다.\n\n${JSON.stringify(article)}`,
+    input: `다음 글 JSON을 웹 검색으로 다시 검증하고 개선하라. ${reviewMode}\n불확실하거나 현재와 맞지 않는 내용은 삭제·수정하고, 최신 공식 출처 URL로 sources를 갱신하며 이미지 마커를 보존하라. 본문에는 마크다운 링크, 괄호형 출처 링크, 도메인 표기, utm_source=openai 추적 주소를 넣지 말고 출처는 sources 배열에만 기록하라. image_prompts 첫 항목의 1:1 대표 썸네일 디자인 지시와 {{IMAGE_1}} 위치도 반드시 보존하라.${freshnessRules(currentDate)}\n목표 언어는 ${options.language || "한국어"}다.\n\n${JSON.stringify(article)}`,
     max_output_tokens: 12000,
     text: { format: { type: "json_schema", name: "fresh_blog_article", strict: true, schema: ARTICLE_SCHEMA } },
     tools: [{ type: "web_search", search_context_size: "medium" }],
     tool_choice: "required"
   });
-  if (!response.output_text) return article;
+  if (!response.output_text) return cleanArticleOutput(article);
   try { return normalizeArticle(JSON.parse(response.output_text), Math.max(0, article.image_prompts.length - 1)); }
-  catch { return article; }
+  catch { return cleanArticleOutput(article); }
 }
 
 export async function generateImages(imagePrompts) {
