@@ -68,3 +68,4 @@ if (topActions) {
 import("/site-health-ui.js?v=20260711-11").catch((error) => console.error("사이트 상태 UI를 불러오지 못했습니다.", error));
 import("/connection-wizard-ui.js?v=20260711-11").catch((error) => console.error("Google 자동 연결 UI를 불러오지 못했습니다.", error));
 import("/google-persistence.js?v=20260712-1").catch((error) => console.error("Google 자동 연결 유지 모듈을 불러오지 못했습니다.", error));
+import("/citation-cleanup-ui.js?v=20260712-3").catch((error) => console.error("출처 문구 정리 UI를 불러오지 못했습니다.", error));
