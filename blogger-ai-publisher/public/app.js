@@ -26,7 +26,8 @@ async function api(url, options = {}) {
 
 function renderStatus() {
   const status = state.status;
-  const googleDetail = status.googleConnected ? "연결됨" : status.googleConfigured ? `미연결 · ${status.googleConfigSource === "uploaded" ? "앱에서 설정" : "Render 설정"}` : "OAuth JSON 등록 필요";
+  const googleSource = status.googleConfigSource === "uploaded" ? "앱 JSON 설정(우선)" : status.googleConfigSource === "environment" ? "Render 설정" : "OAuth JSON 등록 필요";
+  const googleDetail = status.googleConnected ? `연결됨 · ${googleSource}` : status.googleConfigured ? `미연결 · ${googleSource}` : googleSource;
   const rows = [
     ["OpenAI API", status.openaiConfigured, status.textModel],
     ["Google OAuth", status.googleConfigured, googleDetail],
@@ -38,7 +39,7 @@ function renderStatus() {
   $("#statusList").innerHTML = rows.map(([name, ok, detail]) => `<div class="status-row"><span>${escapeHtml(name)}<br><small class="muted">${escapeHtml(detail || "")}</small></span><span class="${ok ? "status-ok" : "status-bad"}">${ok ? "정상" : "설정 필요"}</span></div>`).join("");
   $("#connectionBadge").textContent = status.googleConnected ? "Google 연결됨" : status.googleConfigured ? "Google 미연결" : "Google 설정 필요";
   $("#connectionBadge").className = `badge ${status.googleConnected ? "success" : "warning"}`;
-  $("#googleButton").textContent = status.googleConnected ? "Google 연결 해제" : status.googleConfigured ? "Google 연결" : "Google 설정";
+  $("#googleButton").textContent = status.googleConnected ? "Google 연결 해제" : "Google 연결";
 }
 
 async function loadStatus() {
@@ -136,12 +137,12 @@ async function saveGoogleConfig() {
   let oauthJson = $("#googleJsonText").value.trim();
   if (file) oauthJson = await file.text();
   if (!oauthJson) return showToast("Google OAuth JSON 파일을 선택해 주세요.");
-  setLoading(true, "Google 연결 정보를 저장하는 중입니다", "OAuth 클라이언트 정보를 암호화해 저장합니다.");
+  setLoading(true, "Google 연결 정보를 저장하는 중입니다", "새 JSON 설정을 기존 Render 값보다 우선 적용합니다.");
   try {
     await api("/api/google/config", { method: "POST", body: JSON.stringify({ oauthJson }) });
     $("#googleSetupDialog").close();
     await loadStatus();
-    showToast("Google OAuth 설정을 저장했습니다. Google 로그인으로 이동합니다.");
+    showToast("새 Google OAuth 설정을 저장했습니다. 로그인으로 이동합니다.");
     setTimeout(() => { location.href = "/auth/google"; }, 500);
   } catch (error) { showToast(error.message, 7000); } finally { setLoading(false); }
 }
@@ -157,6 +158,7 @@ $("#saveDraftButton").addEventListener("click", saveCurrentDraft);
 $("#publishDraftButton").addEventListener("click", () => publish(true));
 $("#publishLiveButton").addEventListener("click", () => publish(false));
 $("#saveGoogleConfigButton").addEventListener("click", saveGoogleConfig);
+$("#googleConfigButton").addEventListener("click", openGoogleSetup);
 $("#googleButton").addEventListener("click", async () => {
   if (state.status?.googleConnected) {
     await api("/api/google/disconnect", { method: "POST", body: "{}" });
@@ -184,7 +186,10 @@ const params = new URLSearchParams(location.search);
 if (params.get("google") === "connected") {
   showToast("Google 계정 연결이 완료되었습니다.");
   history.replaceState({}, "", "/");
+  setTimeout(loadStatus, 250);
 } else if (params.get("google") === "error") {
-  showToast(params.get("message") || "Google 연결에 실패했습니다.", 7000);
+  const message = params.get("message") || "Google 연결에 실패했습니다.";
+  showToast(message, 9000);
   history.replaceState({}, "", "/");
+  if (message.includes("client") || message.includes("비밀번호") || message.includes("JSON")) setTimeout(openGoogleSetup, 300);
 }
