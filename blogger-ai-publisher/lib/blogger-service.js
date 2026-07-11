@@ -85,13 +85,97 @@ export async function disconnectGoogle() {
   if (token) try { const client = await createOAuthClient(); client.setCredentials(token); if (token.access_token) await client.revokeToken(token.access_token); } catch {}
   await removeGoogleToken();
 }
+
+function mapBlog(blog, role = "AUTHOR") {
+  return {
+    id: String(blog?.id || ""),
+    name: blog?.name || "이름 없는 블로그",
+    url: blog?.url || "",
+    postsTotal: Number(blog?.posts?.totalItems || 0),
+    role
+  };
+}
+
+function mergeBlogs(target, items, role) {
+  for (const blog of items || []) {
+    if (!blog?.id) continue;
+    const mapped = mapBlog(blog, role);
+    const existing = target.get(mapped.id);
+    if (!existing || role === "ADMIN") target.set(mapped.id, mapped);
+  }
+}
+
 export async function listBlogs() {
   const blogger = google.blogger({ version: "v3", auth: await authorizedClient() });
-  const response = await blogger.blogs.listByUser({ userId: "self", fetchUserInfo: true });
-  return (response.data.items || []).map((blog) => ({ id: blog.id, name: blog.name, url: blog.url, postsTotal: blog.posts?.totalItems || 0 }));
+  const found = new Map();
+  const attempts = [
+    { fetchUserInfo: true },
+    { fetchUserInfo: true, view: "ADMIN" },
+    { fetchUserInfo: true, view: "AUTHOR" }
+  ];
+  let lastError = null;
+  for (const attempt of attempts) {
+    try {
+      const response = await blogger.blogs.listByUser({ userId: "self", ...attempt });
+      mergeBlogs(found, response.data.items, attempt.view || "AUTHOR");
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (!found.size && lastError) {
+    const message = lastError?.response?.data?.error?.message || lastError.message;
+    throw new Error(`Blogger 블로그 목록을 불러오지 못했습니다: ${message}`);
+  }
+  return [...found.values()].sort((a, b) => a.name.localeCompare(b.name, "ko"));
 }
+
+function normalizeBlogUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) throw new Error("블로그 주소를 입력해 주세요.");
+  let url;
+  try { url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`); }
+  catch { throw new Error("올바른 블로그 주소를 입력해 주세요. 예: https://silverbooker.blogspot.com/"); }
+  return `${url.protocol}//${url.host}${url.pathname === "/" ? "/" : url.pathname.replace(/\/+$/, "/")}`;
+}
+
+export async function lookupBlogByUrl(value) {
+  const url = normalizeBlogUrl(value);
+  const auth = await authorizedClient();
+  const blogger = google.blogger({ version: "v3", auth });
+  let blog;
+  try {
+    const response = await blogger.blogs.getByUrl({ url });
+    blog = response.data;
+  } catch (error) {
+    const message = error?.response?.data?.error?.message || error.message;
+    throw new Error(`블로그 주소를 찾지 못했습니다: ${message}`);
+  }
+  if (!blog?.id) throw new Error("블로그 ID를 확인하지 못했습니다.");
+
+  let hasAdminAccess = false;
+  try {
+    const infoResponse = await blogger.blogUserInfos.get({ blogId: blog.id, userId: "self", maxPosts: 0 });
+    const info = infoResponse.data?.blog_user_info || infoResponse.data?.blogUserInfo || {};
+    hasAdminAccess = Boolean(info.hasAdminAccess ?? info.has_admin_access);
+  } catch (error) {
+    const status = error?.response?.status;
+    if (status === 403 || status === 404) {
+      throw new Error("현재 연결한 Google 계정은 이 블로그의 관리자 또는 작성자가 아닙니다. Blogger를 소유한 Google 계정으로 다시 연결해 주세요.");
+    }
+    throw error;
+  }
+
+  return { ...mapBlog(blog, hasAdminAccess ? "ADMIN" : "AUTHOR"), hasAdminAccess };
+}
+
 export async function publishPost({ blogId, title, content, labels, isDraft }) {
   const blogger = google.blogger({ version: "v3", auth: await authorizedClient() });
-  const response = await blogger.posts.insert({ blogId, isDraft: Boolean(isDraft), requestBody: { kind: "blogger#post", title, content, labels } });
-  return { id: response.data.id, title: response.data.title, url: response.data.url || null, status: response.data.status || (isDraft ? "DRAFT" : "LIVE") };
+  try {
+    const response = await blogger.posts.insert({ blogId, isDraft: Boolean(isDraft), requestBody: { kind: "blogger#post", title, content, labels } });
+    return { id: response.data.id, title: response.data.title, url: response.data.url || null, status: response.data.status || (isDraft ? "DRAFT" : "LIVE") };
+  } catch (error) {
+    const status = error?.response?.status;
+    if (status === 403 || status === 404) throw new Error("이 Google 계정에는 선택한 블로그에 글을 작성할 권한이 없습니다. 블로그 소유 계정으로 Google을 다시 연결해 주세요.");
+    throw error;
+  }
 }
