@@ -39,6 +39,11 @@ async function restoreBackup(file) {
 }
 
 if (topActions) {
+  const topics = document.createElement("a");
+  topics.className = "button primary";
+  topics.href = "/topics.html";
+  topics.textContent = "주제 발굴실";
+
   const download = document.createElement("a");
   download.className = "button secondary";
   download.href = "/api/growth/backup/export";
@@ -56,6 +61,7 @@ if (topActions) {
   restore.textContent = "백업 복원";
   restore.addEventListener("click", () => input.click());
 
+  topActions.prepend(topics);
   topActions.append(download, restore, input);
 }
 
