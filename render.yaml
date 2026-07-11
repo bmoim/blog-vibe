@@ -3,7 +3,7 @@ services:
     name: bmoim-blogger-ai-publisher
     runtime: node
     region: singapore
-    plan: starter
+    plan: free
     rootDir: blogger-ai-publisher
     buildCommand: npm install --omit=dev
     startCommand: npm start
@@ -41,10 +41,6 @@ services:
       - key: DAILY_GENERATION_LIMIT
         value: "10"
       - key: DATA_DIR
-        value: /var/data/app-data
+        value: /tmp/app-data
       - key: GENERATED_DIR
-        value: /var/data/generated
-    disk:
-      name: blogger-ai-data
-      mountPath: /var/data
-      sizeGB: 1
+        value: /tmp/generated
