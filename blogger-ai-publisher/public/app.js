@@ -24,6 +24,13 @@ async function api(url, options = {}) {
   return data;
 }
 
+function setBlogMessage(message, type = "muted") {
+  const element = $("#blogConnectionMessage");
+  if (!element) return;
+  element.textContent = message;
+  element.className = `blog-connection-message ${type}`;
+}
+
 function renderStatus() {
   const status = state.status;
   const googleSource = status.googleConfigSource === "uploaded" ? "앱 JSON 설정(우선)" : status.googleConfigSource === "environment" ? "Render 설정" : "OAuth JSON 등록 필요";
@@ -40,6 +47,11 @@ function renderStatus() {
   $("#connectionBadge").textContent = status.googleConnected ? "Google 연결됨" : status.googleConfigured ? "Google 미연결" : "Google 설정 필요";
   $("#connectionBadge").className = `badge ${status.googleConnected ? "success" : "warning"}`;
   $("#googleButton").textContent = status.googleConnected ? "Google 연결 해제" : "Google 연결";
+  if (!status.googleConnected) {
+    state.blogs = [];
+    $("#blogSelect").innerHTML = '<option value="">Google 연결 후 선택</option>';
+    setBlogMessage("Google 계정을 먼저 연결해 주세요.");
+  }
 }
 
 async function loadStatus() {
@@ -47,13 +59,59 @@ async function loadStatus() {
   renderStatus();
   if (state.status.googleConnected) await loadBlogs();
 }
+
+function renderBlogOptions(selectedId = "") {
+  const select = $("#blogSelect");
+  const unique = new Map(state.blogs.map((blog) => [String(blog.id), blog]));
+  state.blogs = [...unique.values()];
+  select.innerHTML = '<option value="">블로그 선택</option>' + state.blogs.map((blog) => {
+    const role = blog.role === "ADMIN" || blog.hasAdminAccess ? "관리자" : "작성자";
+    return `<option value="${escapeHtml(blog.id)}">${escapeHtml(blog.name)} · ${role} · 글 ${Number(blog.postsTotal || 0)}개</option>`;
+  }).join("");
+  if (selectedId && unique.has(String(selectedId))) select.value = String(selectedId);
+}
+
 async function loadBlogs() {
+  if (!state.status?.googleConnected) return;
+  const previous = $("#blogSelect").value;
+  setBlogMessage("연결한 Google 계정에서 Blogger 블로그를 찾고 있습니다…");
   try {
     const data = await api("/api/blogs");
-    state.blogs = data.blogs;
-    $("#blogSelect").innerHTML = '<option value="">블로그 선택</option>' + data.blogs.map((blog) => `<option value="${blog.id}">${escapeHtml(blog.name)} · 글 ${blog.postsTotal}개</option>`).join("");
-  } catch (error) { showToast(error.message); }
+    state.blogs = data.blogs || [];
+    renderBlogOptions(previous);
+    if (state.blogs.length) {
+      setBlogMessage(`${state.blogs.length}개의 운영 블로그를 찾았습니다. 발행할 블로그를 선택하세요.`, "success");
+    } else {
+      setBlogMessage("이 Google 계정에서 운영하거나 작성하는 블로그를 찾지 못했습니다. 아래에 Blogspot 주소를 입력해 직접 확인하세요.", "warning");
+    }
+  } catch (error) {
+    state.blogs = [];
+    renderBlogOptions();
+    setBlogMessage(error.message, "error");
+    showToast(error.message, 7000);
+  }
 }
+
+async function connectBlogByUrl() {
+  if (!state.status?.googleConnected) return showToast("Google 계정을 먼저 연결해 주세요.");
+  const url = $("#manualBlogUrl").value.trim();
+  if (!url) return showToast("Blogspot 블로그 주소를 입력해 주세요.");
+  setLoading(true, "Blogger 블로그를 확인하는 중입니다", "입력한 주소와 현재 Google 계정의 작성 권한을 확인합니다.");
+  try {
+    const data = await api("/api/blogs/lookup", { method: "POST", body: JSON.stringify({ url }) });
+    const blog = data.blog;
+    state.blogs = [...state.blogs.filter((item) => String(item.id) !== String(blog.id)), blog];
+    renderBlogOptions(blog.id);
+    $("#manualBlogUrl").value = blog.url || url;
+    const role = blog.hasAdminAccess ? "관리자" : "작성자";
+    setBlogMessage(`연결 완료: ${blog.name} (${role}) · ${blog.url}`, "success");
+    showToast(`${blog.name} 블로그를 발행 대상으로 연결했습니다.`);
+  } catch (error) {
+    setBlogMessage(error.message, "error");
+    showToast(error.message, 9000);
+  } finally { setLoading(false); }
+}
+
 async function loadDrafts() {
   const data = await api("/api/drafts");
   const list = $("#draftList");
@@ -114,7 +172,7 @@ async function saveCurrentDraft() {
 async function publish(isDraft) {
   if (!state.currentDraft) return;
   const blogId = $("#blogSelect").value;
-  if (!blogId) return showToast("발행할 블로그를 선택해 주세요.");
+  if (!blogId) return showToast("발행할 Blogger 블로그를 선택하거나 주소로 연결해 주세요.");
   if (!isDraft && !confirm("현재 내용을 공개 발행할까요?")) return;
   setLoading(true, isDraft ? "Blogger 초안을 만드는 중입니다" : "Blogger에 공개 발행 중입니다");
   try {
@@ -124,7 +182,7 @@ async function publish(isDraft) {
     $("#publishResult").innerHTML = data.result.url ? `${label} · <a href="${data.result.url}" target="_blank">글 열기</a>` : label;
     showToast(label);
     await loadDrafts();
-  } catch (error) { showToast(error.message, 7000); } finally { setLoading(false); }
+  } catch (error) { showToast(error.message, 9000); } finally { setLoading(false); }
 }
 
 function openGoogleSetup() {
@@ -154,6 +212,9 @@ $$('.tab').forEach((button) => button.addEventListener('click', () => {
 }));
 $("#generateForm").addEventListener("submit", generate);
 $("#refreshDrafts").addEventListener("click", loadDrafts);
+$("#refreshBlogsButton").addEventListener("click", loadBlogs);
+$("#connectBlogByUrlButton").addEventListener("click", connectBlogByUrl);
+$("#manualBlogUrl").addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); connectBlogByUrl(); } });
 $("#saveDraftButton").addEventListener("click", saveCurrentDraft);
 $("#publishDraftButton").addEventListener("click", () => publish(true));
 $("#publishLiveButton").addEventListener("click", () => publish(false));
@@ -184,7 +245,7 @@ $("#draftList").addEventListener("click", async (event) => {
 Promise.all([loadStatus(), loadDrafts()]).catch((error) => showToast(error.message, 7000));
 const params = new URLSearchParams(location.search);
 if (params.get("google") === "connected") {
-  showToast("Google 계정 연결이 완료되었습니다.");
+  showToast("Google 계정 연결이 완료되었습니다. Blogger 블로그 목록을 확인합니다.");
   history.replaceState({}, "", "/");
   setTimeout(loadStatus, 250);
 } else if (params.get("google") === "error") {
