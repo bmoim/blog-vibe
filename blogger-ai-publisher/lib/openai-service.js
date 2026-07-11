@@ -12,7 +12,16 @@ const ARTICLE_SCHEMA = {
     sources: { type: "array", maxItems: 12, items: { type: "object", additionalProperties: false, required: ["title", "url"], properties: { title: { type: "string" }, url: { type: "string" } } } }
   }
 };
-function getClient() { if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY가 설정되지 않았습니다."); return new OpenAI({ apiKey: process.env.OPENAI_API_KEY }); }
+
+function getClient() {
+  if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY가 설정되지 않았습니다.");
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+    timeout: Number(process.env.OPENAI_TIMEOUT_MS || 360000),
+    maxRetries: 1
+  });
+}
+function textModel() { return process.env.OPENAI_TEXT_MODEL || "gpt-5.6-terra"; }
 function clamp(value, min, max) { const number = Number(value); return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : min; }
 function normalizeArticle(article, imageCount) {
   const normalized = {
@@ -37,22 +46,34 @@ function articlePrompt({ topic, targetKeyword, audience, tone, language, article
 }
 export async function generateArticle(options) {
   const client = getClient(); const imageCount = clamp(options.imageCount, 0, 4); const articleLength = clamp(options.articleLength, 1200, 12000); const useWebResearch = Boolean(options.useWebResearch);
-  const request = { model: process.env.OPENAI_TEXT_MODEL || "gpt-5.6", instructions: "정확성, 유용성, 독창성, 사람의 최종 검수를 우선하는 편집 시스템이다.", input: articlePrompt({ ...options, imageCount, articleLength, useWebResearch }), max_output_tokens: 16000, text: { format: { type: "json_schema", name: "blog_article", strict: true, schema: ARTICLE_SCHEMA } } };
-  if (useWebResearch) { request.tools = [{ type: "web_search", search_context_size: "medium" }]; request.tool_choice = "required"; }
+  const request = {
+    model: textModel(),
+    reasoning: { effort: "low" },
+    instructions: "정확성, 유용성, 독창성, 사람의 최종 검수를 우선하는 편집 시스템이다.",
+    input: articlePrompt({ ...options, imageCount, articleLength, useWebResearch }),
+    max_output_tokens: 12000,
+    text: { format: { type: "json_schema", name: "blog_article", strict: true, schema: ARTICLE_SCHEMA } }
+  };
+  if (useWebResearch) { request.tools = [{ type: "web_search", search_context_size: "low" }]; request.tool_choice = "required"; }
   const response = await client.responses.create(request); if (!response.output_text) throw new Error("글 생성 결과가 비어 있습니다.");
   try { return normalizeArticle(JSON.parse(response.output_text), imageCount); } catch { throw new Error("AI가 반환한 글 데이터를 해석하지 못했습니다. 다시 생성해 주세요."); }
 }
 export async function polishArticle(article, options) {
-  const response = await getClient().responses.create({ model: process.env.OPENAI_TEXT_MODEL || "gpt-5.6", instructions: "실제 독자에게 도움이 되는 글만 통과시키는 엄격한 편집장이다.", input: `다음 글 JSON을 검수하고 개선하라. 불확실한 내용은 삭제하거나 신중하게 고치고 출처 URL과 이미지 마커를 보존하라. 목표 언어는 ${options.language || "한국어"}다.\n\n${JSON.stringify(article)}`, max_output_tokens: 16000, text: { format: { type: "json_schema", name: "polished_blog_article", strict: true, schema: ARTICLE_SCHEMA } } });
+  const response = await getClient().responses.create({
+    model: textModel(), reasoning: { effort: "low" },
+    instructions: "실제 독자에게 도움이 되는 글만 통과시키는 엄격한 편집장이다.",
+    input: `다음 글 JSON을 검수하고 개선하라. 불확실한 내용은 삭제하거나 신중하게 고치고 출처 URL과 이미지 마커를 보존하라. 목표 언어는 ${options.language || "한국어"}다.\n\n${JSON.stringify(article)}`,
+    max_output_tokens: 12000,
+    text: { format: { type: "json_schema", name: "polished_blog_article", strict: true, schema: ARTICLE_SCHEMA } }
+  });
   if (!response.output_text) return article; try { return normalizeArticle(JSON.parse(response.output_text), article.image_prompts.length); } catch { return article; }
 }
 export async function generateImages(imagePrompts) {
-  const client = getClient(); const images = []; const model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2";
-  for (let index = 0; index < imagePrompts.length; index += 1) {
-    const item = imagePrompts[index];
+  const client = getClient(); const model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2";
+  return Promise.all(imagePrompts.map(async (item, index) => {
     const result = await client.images.generate({ model, prompt: `${item.prompt}\nProfessional editorial blog photography, landscape 16:9 composition, no text, no logo, no watermark, culturally natural and visually credible.`, size: "1536x1024", quality: process.env.OPENAI_IMAGE_QUALITY || "medium", output_format: "webp", output_compression: 82, n: 1 });
     const b64 = result.data?.[0]?.b64_json; if (!b64) throw new Error(`${index + 1}번째 이미지 생성 결과가 비어 있습니다.`);
-    const filename = await saveGeneratedImage(Buffer.from(b64, "base64"), "webp"); images.push({ index: index + 1, filename, localUrl: `/generated/${filename}`, alt: item.alt, caption: item.caption, prompt: item.prompt });
-  }
-  return images;
+    const filename = await saveGeneratedImage(Buffer.from(b64, "base64"), "webp");
+    return { index: index + 1, filename, localUrl: `/generated/${filename}`, alt: item.alt, caption: item.caption, prompt: item.prompt };
+  }));
 }
