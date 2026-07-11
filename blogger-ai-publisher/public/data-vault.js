@@ -100,8 +100,10 @@ async function saveCurrentSnapshot() {
       totalRecords: bundleRecordCount(data.bundle)
     });
     updateBadge(data.status, true);
+    return data.status;
   } catch (error) {
     console.warn("Browser data vault backup failed:", error.message);
+    return null;
   } finally {
     saving = false;
   }
@@ -127,27 +129,67 @@ function installMutationBackup() {
   };
 }
 
+function selectedDraftLabel() {
+  const select = document.querySelector("#growthDraftSelect");
+  return select?.selectedOptions?.[0]?.textContent?.trim() || select?.value || "";
+}
+
+function installUiActivityTracking() {
+  const actions = {
+    refreshGrowthDashboard: ["growth-analysis", "검색·방문·수익 대시보드 조회"],
+    runQualityGate: ["growth-analysis", "발행 전 품질 검사"],
+    runCannibalization: ["growth-analysis", "중복 키워드 검사"],
+    runInternalLinks: ["growth-analysis", "내부링크 추천 조회"],
+    runFreshnessAudit: ["growth-analysis", "최신 정보 정밀 검수"],
+    runVariants: ["growth-analysis", "제목·썸네일 개선안 조회"],
+    runGrowthMonitor: ["growth-analysis", "업데이트 필요 글 전체 조회"],
+    runIndexInspection: ["growth-analysis", "Google 색인 상태 조회"],
+    runLinkHealth: ["growth-analysis", "깨진 링크 상태 조회"]
+  };
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest?.("button[id]");
+    const config = button ? actions[button.id] : null;
+    if (!config) return;
+    requestJson("/api/growth/history", {
+      method: "POST",
+      body: JSON.stringify({
+        type: config[0],
+        title: config[1],
+        query: selectedDraftLabel(),
+        metadata: { page: location.pathname }
+      })
+    }).catch(() => null);
+  }, true);
+}
+
 async function restoreIfServerWasReset(status) {
   if (status.totalRecords > 0 || sessionStorage.getItem(RESTORE_SESSION_KEY)) return false;
   const vault = await readVault();
   if (!vault?.bundle || Number(vault.totalRecords || bundleRecordCount(vault.bundle)) <= 0) return false;
   sessionStorage.setItem(RESTORE_SESSION_KEY, "1");
-  const response = await fetch("/api/growth/persistence/import", {
-    method: "POST",
-    cache: "no-store",
-    headers: { "Content-Type": "application/octet-stream" },
-    body: JSON.stringify({ bundle: vault.bundle })
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || "브라우저 백업 복원에 실패했습니다.");
-  location.reload();
-  return true;
+  try {
+    const response = await fetch("/api/growth/persistence/import", {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: JSON.stringify({ bundle: vault.bundle })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "브라우저 백업 복원에 실패했습니다.");
+    location.reload();
+    return true;
+  } catch (error) {
+    sessionStorage.removeItem(RESTORE_SESSION_KEY);
+    throw error;
+  }
 }
 
 async function initializeDataVault() {
   addHistoryLink();
   addVaultBadge();
   installMutationBackup();
+  installUiActivityTracking();
+  window.blogDataVaultSave = saveCurrentSnapshot;
   try {
     const status = await requestJson("/api/growth/persistence/status");
     if (await restoreIfServerWasReset(status)) return;
