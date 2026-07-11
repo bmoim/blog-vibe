@@ -6,7 +6,7 @@ import session from "express-session";
 import sessionFileStore from "session-file-store";
 import sanitizeHtml from "sanitize-html";
 import { generateArticle, generateImages, polishArticle } from "./lib/openai-service.js";
-import { createGoogleAuthUrl, disconnectGoogle, handleGoogleCallback, isGoogleConnected, isGoogleConfigured, getGoogleConfigStatus, saveGoogleConfigFromJson, clearGoogleConfig, listBlogs, publishPost, getGoogleRedirectUri } from "./lib/blogger-service.js";
+import { createGoogleAuthUrl, disconnectGoogle, handleGoogleCallback, isGoogleConnected, isGoogleConfigured, getGoogleConfigStatus, saveGoogleConfigFromJson, clearGoogleConfig, listBlogs, lookupBlogByUrl, publishPost, getGoogleRedirectUri } from "./lib/blogger-service.js";
 import { deleteDraft, getDailyUsage, getDraft, incrementDailyUsage, listDrafts, saveDraft, generatedDirectory, dataDirectory } from "./lib/storage.js";
 import { hostImages, imageHostConfigured } from "./lib/image-host.js";
 
@@ -157,6 +157,11 @@ app.get("/auth/google/callback", async (req, res) => {
 });
 app.post("/api/google/disconnect", async (req, res) => { await disconnectGoogle(); res.json({ ok: true }); });
 app.get("/api/blogs", async (req, res) => res.json({ blogs: await listBlogs() }));
+app.post("/api/blogs/lookup", async (req, res) => {
+  const url = safeText(req.body?.url, 500);
+  const blog = await lookupBlogByUrl(url);
+  res.json({ blog });
+});
 app.get("/api/drafts", async (req, res) => res.json({ drafts: await listDrafts() }));
 app.get("/api/drafts/:id", async (req, res) => {
   const draft = await getDraft(req.params.id);
