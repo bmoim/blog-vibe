@@ -3,6 +3,7 @@ import { createGrowthRouter, startGrowthScheduler } from "./growth-router.js";
 import { createGrowthBackupRouter } from "./growth-backup-router.js";
 import { createPublishedUpdateRouter } from "./published-update-router.js";
 import { createSiteHealthRouter } from "./site-health-router.js";
+import { createQualityGateRouter } from "./quality-gate-router.js";
 
 const originalListen = express.application.listen;
 
@@ -20,6 +21,7 @@ if (!express.application.__growthCenterPatched) {
       this.use("/api/growth", createGrowthBackupRouter());
       this.use("/api/growth", createPublishedUpdateRouter());
       this.use("/api/growth", createSiteHealthRouter());
+      this.use("/api/growth", createQualityGateRouter());
       this.use("/api/growth", createGrowthRouter());
       this.use("/api/growth", (error, req, res, next) => {
         console.error(error);
