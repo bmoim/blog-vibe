@@ -21,7 +21,10 @@ function getClient() {
     maxRetries: 1
   });
 }
-function textModel() { return process.env.OPENAI_TEXT_MODEL || "gpt-5.6"; }
+function textModel() {
+  const configured = String(process.env.OPENAI_TEXT_MODEL || "gpt-5.6").trim();
+  return configured === "gpt-5.6-terra" ? "gpt-5.6" : configured;
+}
 function clamp(value, min, max) { const number = Number(value); return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : min; }
 function normalizeArticle(article, imageCount) {
   const normalized = {
