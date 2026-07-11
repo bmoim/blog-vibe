@@ -2,7 +2,12 @@ import crypto from "node:crypto";
 import { google } from "googleapis";
 import { readGoogleToken, saveGoogleToken, removeGoogleToken, readGoogleOAuthConfig, saveGoogleOAuthConfig, removeGoogleOAuthConfig } from "./storage.js";
 
-const SCOPES = ["https://www.googleapis.com/auth/blogger"];
+const SCOPES = [
+  "https://www.googleapis.com/auth/blogger",
+  "https://www.googleapis.com/auth/webmasters.readonly",
+  "https://www.googleapis.com/auth/analytics.readonly",
+  "https://www.googleapis.com/auth/adsense.readonly"
+];
 function cleanBaseUrl(value) { return String(value || "").replace(/\/+$/, ""); }
 export function getGoogleRedirectUri() {
   if (process.env.GOOGLE_REDIRECT_URI) return process.env.GOOGLE_REDIRECT_URI;
