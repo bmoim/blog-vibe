@@ -1,5 +1,6 @@
 import express from "express";
 import { appendActivity, clearActivities, listActivities } from "./activity-history.js";
+import { listQueryResults } from "./query-results.js";
 import {
   getBrowserVaultBundle,
   getPersistentDataStatus,
@@ -49,6 +50,15 @@ router.get("/history", async (req, res) => {
     search: String(req.query.search || "")
   });
   res.json({ records, status: await getPersistentDataStatus() });
+});
+
+router.get("/history/results", async (req, res) => {
+  const results = await listQueryResults({
+    limit: req.query.limit,
+    type: String(req.query.type || ""),
+    search: String(req.query.search || "")
+  });
+  res.json({ results, status: await getPersistentDataStatus() });
 });
 
 router.post("/history", async (req, res) => {
