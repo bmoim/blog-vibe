@@ -1,13 +1,13 @@
 {
   "name": "blogger-ai-autopublisher",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
-  "description": "주제 입력만으로 SEO 블로그 글과 이미지를 생성하고 Blogger에 발행하는 단일 사용자용 웹앱",
+  "description": "주제 입력만으로 최신 자료 기반 SEO 블로그 글과 이미지를 생성하고 Blogger에 발행하는 단일 사용자용 웹앱",
   "scripts": {
     "dev": "node --watch server.js",
     "start": "node server.js",
-    "check": "node --check server.js && node --check lib/openai-service.js && node --check lib/blogger-service.js && node --check lib/storage.js && node --check lib/image-host.js"
+    "check": "node --check server.js && node --check lib/openai-service.js && node --check lib/blogger-service.js && node --check lib/storage.js && node --check lib/image-host.js && node --check public/generation-enhancements.js"
   },
   "engines": {
     "node": ">=20"
