@@ -1,5 +1,16 @@
 const preview = document.querySelector("#articlePreview");
 const target = document.querySelector("#thumbnailPreview");
+const CURRENT_DRAFT_KEY = "blogger-ai-current-draft-id";
+let publishQualityBypass = false;
+
+function toast(message, duration = 6500) {
+  const element = document.querySelector("#toast");
+  if (!element) return;
+  element.textContent = message;
+  element.classList.remove("hidden");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => element.classList.add("hidden"), duration);
+}
 
 function addGrowthCenterLink() {
   const actions = document.querySelector(".top-actions");
@@ -11,10 +22,18 @@ function addGrowthCenterLink() {
   actions.prepend(link);
 }
 
+function trackOpenedDrafts() {
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest?.("[data-open-draft]");
+    if (button?.dataset.openDraft) localStorage.setItem(CURRENT_DRAFT_KEY, button.dataset.openDraft);
+  }, true);
+}
+
 async function openRequestedDraft() {
   const params = new URLSearchParams(location.search);
   const draftId = params.get("generatedDraft");
   if (!draftId) return;
+  localStorage.setItem(CURRENT_DRAFT_KEY, draftId);
   history.replaceState({}, "", "/");
   for (let attempt = 0; attempt < 60; attempt += 1) {
     const button = document.querySelector(`[data-open-draft="${CSS.escape(draftId)}"]`);
@@ -24,6 +43,62 @@ async function openRequestedDraft() {
     }
     await new Promise((resolve) => setTimeout(resolve, 400));
   }
+}
+
+async function requestJson(url, options = {}) {
+  const response = await fetch(url, {
+    cache: "no-store",
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    ...options
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "요청에 실패했습니다.");
+  return data;
+}
+
+function installPublishQualityGuard() {
+  const button = document.querySelector("#publishLiveButton");
+  if (!button) return;
+  button.addEventListener("click", async (event) => {
+    if (publishQualityBypass) {
+      publishQualityBypass = false;
+      return;
+    }
+    const draftId = localStorage.getItem(CURRENT_DRAFT_KEY);
+    if (!draftId) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const original = button.textContent;
+    button.disabled = true;
+    button.textContent = "발행 전 품질 검사 중…";
+    try {
+      const { quality } = await requestJson(`/api/growth/drafts/${encodeURIComponent(draftId)}/quality`);
+      const failed = quality.checks?.filter((check) => !check.passed) || [];
+      if (!quality.pass) {
+        const summary = failed.slice(0, 5).map((check) => `• ${check.name}`).join("\n");
+        const override = confirm(`품질 점수 ${quality.score}점입니다.\n\n개선 필요 항목:\n${summary || "추가 검수 필요"}\n\n그래도 공개 발행할까요?`);
+        if (!override) {
+          toast("공개 발행을 멈췄습니다. 성장 센터에서 개선한 뒤 다시 발행하세요.", 8000);
+          return;
+        }
+      }
+      await requestJson(`/api/growth/drafts/${encodeURIComponent(draftId)}/versions/snapshot`, {
+        method: "POST",
+        body: JSON.stringify({ reason: "before-live-publish" })
+      }).catch(() => null);
+      publishQualityBypass = true;
+      button.click();
+    } catch (error) {
+      const proceed = confirm(`품질 검사를 완료하지 못했습니다.\n${error.message}\n\n그래도 공개 발행할까요?`);
+      if (proceed) {
+        publishQualityBypass = true;
+        button.click();
+      }
+    } finally {
+      button.disabled = false;
+      button.textContent = original;
+    }
+  }, true);
 }
 
 function absoluteUrl(value) {
@@ -58,7 +133,9 @@ function renderThumbnailTab() {
 }
 
 addGrowthCenterLink();
+trackOpenedDrafts();
 openRequestedDraft();
+installPublishQualityGuard();
 if (preview && target) {
   new MutationObserver(renderThumbnailTab).observe(preview, { childList: true, subtree: true, attributes: true });
   renderThumbnailTab();
