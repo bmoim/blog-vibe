@@ -112,7 +112,11 @@ let shuttingDown = false;
 async function shutdownPersistence() {
   if (shuttingDown) return;
   shuttingDown = true;
-  await closePersistentData();
+  try {
+    await closePersistentData();
+  } finally {
+    process.exit(0);
+  }
 }
 process.once("SIGTERM", shutdownPersistence);
 process.once("SIGINT", shutdownPersistence);
