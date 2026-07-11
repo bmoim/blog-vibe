@@ -5,6 +5,7 @@ import { dataDirectory } from "./storage.js";
 
 const ACTIVITY_FILE = path.join(dataDirectory, "activity-history.json");
 const MAX_RECORDS = 3000;
+let writeQueue = Promise.resolve();
 
 async function readActivities() {
   try {
@@ -38,8 +39,7 @@ function cleanMetadata(value, depth = 0) {
   return value;
 }
 
-export async function appendActivity({ type, title, query = "", metadata = {}, status = "completed" }) {
-  const records = await readActivities();
+export function appendActivity({ type, title, query = "", metadata = {}, status = "completed" }) {
   const record = {
     id: crypto.randomUUID(),
     type: String(type || "activity").slice(0, 80),
@@ -49,12 +49,17 @@ export async function appendActivity({ type, title, query = "", metadata = {}, s
     status: String(status || "completed").slice(0, 30),
     createdAt: new Date().toISOString()
   };
-  records.push(record);
-  await writeActivities(records.slice(-MAX_RECORDS));
-  return record;
+  writeQueue = writeQueue.then(async () => {
+    const records = await readActivities();
+    records.push(record);
+    await writeActivities(records.slice(-MAX_RECORDS));
+    return record;
+  });
+  return writeQueue;
 }
 
 export async function listActivities({ limit = 200, type = "", search = "" } = {}) {
+  await writeQueue.catch(() => null);
   let records = await readActivities();
   if (type) records = records.filter((item) => item.type === type);
   if (search) {
@@ -64,6 +69,7 @@ export async function listActivities({ limit = 200, type = "", search = "" } = {
   return records.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, Math.max(1, Math.min(1000, Number(limit || 200))));
 }
 
-export async function clearActivities() {
-  await writeActivities([]);
+export function clearActivities() {
+  writeQueue = writeQueue.then(() => writeActivities([]));
+  return writeQueue;
 }
