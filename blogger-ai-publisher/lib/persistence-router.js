@@ -1,0 +1,53 @@
+import express from "express";
+import { appendActivity, clearActivities, listActivities } from "./activity-history.js";
+import {
+  getBrowserVaultBundle,
+  getPersistentDataStatus,
+  restoreBrowserVaultBundle,
+  syncPersistentDataNow
+} from "./persistent-data.js";
+
+const router = express.Router();
+
+router.get("/persistence/status", async (req, res) => {
+  res.json(await getPersistentDataStatus());
+});
+
+router.get("/persistence/export", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json({ bundle: await getBrowserVaultBundle(), status: await getPersistentDataStatus() });
+});
+
+router.post("/persistence/import", async (req, res) => {
+  const restored = await restoreBrowserVaultBundle(req.body?.bundle);
+  if (!restored) return res.status(400).json({ error: "복원할 데이터 형식이 올바르지 않습니다." });
+  res.json({ ok: true, status: await getPersistentDataStatus() });
+});
+
+router.post("/persistence/sync", async (req, res) => {
+  const synced = await syncPersistentDataNow();
+  res.json({ ok: true, synced, status: await getPersistentDataStatus() });
+});
+
+router.get("/history", async (req, res) => {
+  const records = await listActivities({
+    limit: req.query.limit,
+    type: String(req.query.type || ""),
+    search: String(req.query.search || "")
+  });
+  res.json({ records, status: await getPersistentDataStatus() });
+});
+
+router.post("/history", async (req, res) => {
+  res.json({ record: await appendActivity(req.body || {}) });
+});
+
+router.delete("/history", async (req, res) => {
+  await clearActivities();
+  await syncPersistentDataNow();
+  res.json({ ok: true });
+});
+
+export function createPersistenceRouter() {
+  return router;
+}
