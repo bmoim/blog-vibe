@@ -8,6 +8,12 @@ if (!express.application.__growthCenterPatched) {
   express.application.listen = function patchedListen(...args) {
     if (!this.locals.__growthCenterInstalled) {
       this.locals.__growthCenterInstalled = true;
+      this.use("/api/growth/schedules", (req, res, next) => {
+        if (req.method === "POST" && typeof req.body?.publishAt === "string" && !/(?:Z|[+-]\d{2}:\d{2})$/.test(req.body.publishAt)) {
+          req.body.publishAt = `${req.body.publishAt}+09:00`;
+        }
+        next();
+      });
       this.use("/api/growth", createGrowthRouter());
       this.use("/api/growth", (error, req, res, next) => {
         console.error(error);
