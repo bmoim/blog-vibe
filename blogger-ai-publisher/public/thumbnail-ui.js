@@ -1,6 +1,16 @@
 const preview = document.querySelector("#articlePreview");
 const target = document.querySelector("#thumbnailPreview");
 
+function addGrowthCenterLink() {
+  const actions = document.querySelector(".top-actions");
+  if (!actions || actions.querySelector('[href="/growth.html"]')) return;
+  const link = document.createElement("a");
+  link.className = "button primary";
+  link.href = "/growth.html";
+  link.textContent = "성장 센터";
+  actions.prepend(link);
+}
+
 function absoluteUrl(value) {
   try { return new URL(value, window.location.origin).href; } catch { return value || ""; }
 }
@@ -32,6 +42,7 @@ function renderThumbnailTab() {
   `;
 }
 
+addGrowthCenterLink();
 if (preview && target) {
   new MutationObserver(renderThumbnailTab).observe(preview, { childList: true, subtree: true, attributes: true });
   renderThumbnailTab();
