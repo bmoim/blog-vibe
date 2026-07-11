@@ -140,3 +140,5 @@ if (preview && target) {
   new MutationObserver(renderThumbnailTab).observe(preview, { childList: true, subtree: true, attributes: true });
   renderThumbnailTab();
 }
+
+import("/google-persistence.js?v=20260712-1").catch((error) => console.error("Google 자동 연결 모듈을 불러오지 못했습니다.", error));
