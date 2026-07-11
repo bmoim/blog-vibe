@@ -7,6 +7,7 @@ import { createQualityGateRouter } from "./quality-gate-router.js";
 import { createConnectionDiscoveryRouter } from "./connection-discovery-router.js";
 import { createGooglePersistenceRouter } from "./google-persistence-router.js";
 import { createTopicEngineRouter } from "./topic-engine-router.js";
+import { createCitationCleanupRouter } from "./citation-cleanup-router.js";
 
 const originalListen = express.application.listen;
 
@@ -28,6 +29,7 @@ if (!express.application.__growthCenterPatched) {
       this.use("/api/growth", createConnectionDiscoveryRouter());
       this.use("/api/growth", createGooglePersistenceRouter());
       this.use("/api/growth", createTopicEngineRouter());
+      this.use("/api/growth", createCitationCleanupRouter());
       this.use("/api/growth", createGrowthRouter());
       this.use("/api/growth", (error, req, res, next) => {
         console.error(error);
