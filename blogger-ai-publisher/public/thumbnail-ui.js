@@ -11,6 +11,21 @@ function addGrowthCenterLink() {
   actions.prepend(link);
 }
 
+async function openRequestedDraft() {
+  const params = new URLSearchParams(location.search);
+  const draftId = params.get("generatedDraft");
+  if (!draftId) return;
+  history.replaceState({}, "", "/");
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const button = document.querySelector(`[data-open-draft="${CSS.escape(draftId)}"]`);
+    if (button) {
+      button.click();
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+}
+
 function absoluteUrl(value) {
   try { return new URL(value, window.location.origin).href; } catch { return value || ""; }
 }
@@ -43,6 +58,7 @@ function renderThumbnailTab() {
 }
 
 addGrowthCenterLink();
+openRequestedDraft();
 if (preview && target) {
   new MutationObserver(renderThumbnailTab).observe(preview, { childList: true, subtree: true, attributes: true });
   renderThumbnailTab();
