@@ -14,7 +14,8 @@ const DATA_FILES = [
   "draft-versions.json",
   "growth-monitor.json",
   "topic-plans.json",
-  "activity-history.json"
+  "activity-history.json",
+  "query-results.json"
 ];
 
 let pool = null;
@@ -263,11 +264,13 @@ async function dataCounts() {
   const drafts = await readJsonOptional(path.join(dataDirectory, "drafts.json"));
   const plans = await readJsonOptional(path.join(dataDirectory, "topic-plans.json"));
   const activities = await readJsonOptional(path.join(dataDirectory, "activity-history.json"));
+  const queryResults = await readJsonOptional(path.join(dataDirectory, "query-results.json"));
   const versions = await readJsonOptional(path.join(dataDirectory, "draft-versions.json"));
   return {
     drafts: Array.isArray(drafts) ? drafts.length : 0,
     topicPlans: Array.isArray(plans) ? plans.length : 0,
     activities: Array.isArray(activities) ? activities.length : 0,
+    queryResults: Array.isArray(queryResults) ? queryResults.length : 0,
     versions: Array.isArray(versions) ? versions.length : 0
   };
 }
