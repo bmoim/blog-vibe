@@ -1,5 +1,6 @@
 import express from "express";
 import { createGrowthRouter, startGrowthScheduler } from "./growth-router.js";
+import { createGrowthBackupRouter } from "./growth-backup-router.js";
 
 const originalListen = express.application.listen;
 
@@ -14,6 +15,7 @@ if (!express.application.__growthCenterPatched) {
         }
         next();
       });
+      this.use("/api/growth", createGrowthBackupRouter());
       this.use("/api/growth", createGrowthRouter());
       this.use("/api/growth", (error, req, res, next) => {
         console.error(error);
