@@ -2,6 +2,7 @@ const resultList = document.querySelector("#queryResultList");
 const resultSearch = document.querySelector("#queryResultSearch");
 const resultType = document.querySelector("#queryResultType");
 const refreshButton = document.querySelector("#refreshQueryResults");
+let latestStatus = null;
 
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>'\"]/g, (character) => ({
@@ -61,14 +62,18 @@ function renderResults(results) {
   }).join("");
 }
 
-function addQueryResultMetric(status) {
+function addQueryResultMetric(status = latestStatus) {
+  latestStatus = status || latestStatus;
   const metrics = document.querySelector("#persistenceMetrics");
-  if (!metrics || metrics.querySelector('[data-query-result-metric="true"]')) return;
-  const card = document.createElement("div");
-  card.className = "history-metric";
-  card.dataset.queryResultMetric = "true";
-  card.innerHTML = `<span>저장된 조회 결과</span><strong>${Number(status?.counts?.queryResults || 0).toLocaleString("ko-KR")}</strong>`;
-  metrics.appendChild(card);
+  if (!metrics || !latestStatus) return;
+  let card = metrics.querySelector('[data-query-result-metric="true"]');
+  if (!card) {
+    card = document.createElement("div");
+    card.className = "history-metric";
+    card.dataset.queryResultMetric = "true";
+    metrics.appendChild(card);
+  }
+  card.innerHTML = `<span>저장된 조회 결과</span><strong>${Number(latestStatus.counts?.queryResults || 0).toLocaleString("ko-KR")}</strong>`;
 }
 
 async function loadResults() {
@@ -84,6 +89,9 @@ async function loadResults() {
   addQueryResultMetric(data.status);
   renderResults(data.results || []);
 }
+
+const metrics = document.querySelector("#persistenceMetrics");
+if (metrics) new MutationObserver(() => addQueryResultMetric()).observe(metrics, { childList: true });
 
 let searchTimer;
 resultSearch?.addEventListener("input", () => {
