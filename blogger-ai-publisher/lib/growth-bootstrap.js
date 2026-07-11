@@ -10,6 +10,7 @@ import { createTopicEngineRouter } from "./topic-engine-router.js";
 import { createCitationCleanupRouter } from "./citation-cleanup-router.js";
 import { createPersistenceRouter } from "./persistence-router.js";
 import { appendActivity } from "./activity-history.js";
+import { queryResultCaptureMiddleware } from "./query-results.js";
 import {
   closePersistentData,
   initializePersistentData,
@@ -86,6 +87,7 @@ if (!express.application.__growthCenterPatched) {
         }
         next();
       });
+      this.use("/api/growth", queryResultCaptureMiddleware);
       this.use("/api/growth", createGrowthBackupRouter());
       this.use("/api/growth", createPublishedUpdateRouter());
       this.use("/api/growth", createSiteHealthRouter());
