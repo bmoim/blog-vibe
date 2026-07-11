@@ -49,7 +49,7 @@ export function appendActivity({ type, title, query = "", metadata = {}, status 
     status: String(status || "completed").slice(0, 30),
     createdAt: new Date().toISOString()
   };
-  writeQueue = writeQueue.then(async () => {
+  writeQueue = writeQueue.catch(() => null).then(async () => {
     const records = await readActivities();
     records.push(record);
     await writeActivities(records.slice(-MAX_RECORDS));
@@ -70,6 +70,6 @@ export async function listActivities({ limit = 200, type = "", search = "" } = {
 }
 
 export function clearActivities() {
-  writeQueue = writeQueue.then(() => writeActivities([]));
+  writeQueue = writeQueue.catch(() => null).then(() => writeActivities([]));
   return writeQueue;
 }
