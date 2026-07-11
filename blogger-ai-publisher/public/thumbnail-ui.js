@@ -143,3 +143,4 @@ if (preview && target) {
 
 import("/google-persistence.js?v=20260712-1").catch((error) => console.error("Google 자동 연결 모듈을 불러오지 못했습니다.", error));
 import("/topic-prefill.js?v=20260712-2").catch((error) => console.error("주제 발굴실 연결 모듈을 불러오지 못했습니다.", error));
+import("/data-vault.js?v=20260712-4").catch((error) => console.error("데이터 자동 보관 모듈을 불러오지 못했습니다.", error));
