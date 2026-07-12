@@ -9,15 +9,21 @@ import { generateArticle, generateImages, polishArticle, listAvailableTextModels
 import { createGoogleAuthUrl, disconnectGoogle, handleGoogleCallback, isGoogleConnected, getGoogleConfigStatus, saveGoogleConfigFromJson, clearGoogleConfig, listBlogs, lookupBlogByUrl, publishPost, getGoogleRedirectUri } from "./lib/blogger-service.js";
 import { deleteDraft, getDailyUsage, getDraft, incrementDailyUsage, listDrafts, saveDraft, generatedDirectory, dataDirectory } from "./lib/storage.js";
 import { hostImages, imageHostConfigured } from "./lib/image-host.js";
+import { loadGenerationJobs, persistGenerationJobs } from "./lib/generation-job-store.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const ROOT = process.cwd();
 const FileStore = sessionFileStore(session);
-const generationJobs = new Map();
+const generationJobs = await loadGenerationJobs();
 
 app.set("trust proxy", 1);
-app.get("/health", (req, res) => res.json({ ok: true }));
+app.get("/health", (req, res) => res.json({
+  ok: true,
+  timestamp: new Date().toISOString(),
+  uptimeSeconds: Math.floor(process.uptime()),
+  activeGenerationJobs: [...generationJobs.values()].filter((job) => ["queued", "running"].includes(job.status)).length
+}));
 
 // Blogger, 검색엔진, 썸네일 수집기가 생성 이미지를 로그인 없이 읽을 수 있어야 한다.
 // 앱 화면과 API는 계속 Basic Auth로 보호하고 /generated 경로만 공개한다.
@@ -165,15 +171,40 @@ function buildGenerationInput(body = {}) {
 }
 
 async function generateDraft(input, onProgress = () => {}) {
-  onProgress(12, "최신 자료를 검색하고 글 구조를 설계하고 있습니다.");
+  onProgress(12, "최신 자료를 검색하고 글 구조를 설계하고 있습니다.", "article");
   let article = await generateArticle(input);
-  onProgress(55, `오늘(${input.currentDate}) 기준으로 사실과 날짜를 다시 검증하고 있습니다.`);
-  article = await polishArticle(article, input);
-  onProgress(75, input.imageCount > 0 ? "본문용 이미지를 생성하고 있습니다." : "최종 글을 정리하고 있습니다.");
-  const images = input.imageCount > 0 ? await generateImages(article.image_prompts) : [];
-  onProgress(92, "초안과 SEO 점수를 저장하고 있습니다.");
+
+  if (input.premiumReview) {
+    onProgress(56, `오늘(${input.currentDate}) 기준으로 2차 편집장 검수를 진행하고 있습니다.`, "review");
+    article = await polishArticle(article, input);
+    onProgress(72, "글 작성과 정밀 검수가 완료되었습니다.", "review-completed");
+  } else {
+    onProgress(66, "글 작성과 최신 자료 확인이 완료되었습니다.", "article-completed");
+  }
+
+  onProgress(76, "1:1 대표 썸네일과 본문 이미지를 생성하고 있습니다.", "images");
+  let images = [];
+  let imageWarning = "";
+  try {
+    images = await generateImages(article.image_prompts);
+  } catch (error) {
+    console.error("Image generation failed; saving text draft:", error);
+    imageWarning = `이미지는 생성하지 못했지만 글 초안은 저장했습니다. ${error.message || "이미지 생성 오류"}`;
+    onProgress(90, "이미지 생성에 실패해 글 초안을 먼저 저장하고 있습니다.", "saving-without-images");
+  }
+
+  onProgress(94, "초안과 SEO 점수를 저장하고 있습니다.", "saving");
   const seo = seoScore(article, input.targetKeyword || input.topic, images.length);
-  const draft = await saveDraft({ input, article, images, seoScore: seo.score, seoChecks: seo.checks, characterCount: seo.characterCount, publishHistory: [] });
+  const draft = await saveDraft({
+    input,
+    article,
+    images,
+    generationWarning: imageWarning,
+    seoScore: seo.score,
+    seoChecks: seo.checks,
+    characterCount: seo.characterCount,
+    publishHistory: []
+  });
   await incrementDailyUsage();
   return draft;
 }
@@ -184,6 +215,10 @@ function publicJob(job) {
     status: job.status,
     progress: job.progress,
     message: job.message,
+    phase: job.phase || null,
+    attempts: Number(job.attempts || 0),
+    resumed: Boolean(job.resumed),
+    warning: job.warning || null,
     draftId: job.draftId || null,
     error: job.error || null,
     createdAt: job.createdAt,
@@ -191,27 +226,73 @@ function publicJob(job) {
   };
 }
 
-function updateJob(job, patch) {
-  Object.assign(job, patch, { updatedAt: new Date().toISOString() });
+function saveJobState() {
+  persistGenerationJobs(generationJobs).catch((error) => console.error("Generation job persistence failed:", error));
 }
 
-async function runGenerationJob(job, input) {
+function updateJob(job, patch) {
+  Object.assign(job, patch, { updatedAt: new Date().toISOString() });
+  saveJobState();
+}
+
+async function runGenerationJob(job, input, { resumed = false } = {}) {
+  if (!job || job.workerActive || ["completed", "canceled"].includes(job.status)) return;
+  job.workerActive = true;
+  job.input = input || job.input;
+  job.attempts = Number(job.attempts || 0) + 1;
+  job.resumed = resumed || Boolean(job.resumed);
+  const startedAt = Date.now();
+  const heartbeat = setInterval(() => {
+    if (job.status !== "running") return;
+    job.updatedAt = new Date().toISOString();
+    job.elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000);
+    saveJobState();
+  }, 15000);
+  heartbeat.unref();
+
   try {
-    updateJob(job, { status: "running", progress: 5, message: "생성 작업을 시작했습니다." });
-    const draft = await generateDraft(input, (progress, message) => updateJob(job, { progress, message }));
-    updateJob(job, { status: "completed", progress: 100, message: "글과 이미지 생성이 완료되었습니다.", draftId: draft.id });
+    updateJob(job, {
+      status: "running",
+      progress: Math.max(5, Number(job.progress || 0)),
+      phase: "starting",
+      error: null,
+      message: resumed ? "서버 재시작 후 생성 작업을 자동으로 이어서 시작했습니다." : "생성 작업을 시작했습니다."
+    });
+    const draft = await generateDraft(job.input, (progress, message, phase) => {
+      if (job.status === "canceled") throw new Error("사용자가 생성 작업을 중단했습니다.");
+      updateJob(job, { progress, message, phase });
+    });
+    if (job.status === "canceled") return;
+    updateJob(job, {
+      status: "completed",
+      progress: 100,
+      phase: "completed",
+      message: draft.generationWarning ? "글 생성은 완료됐지만 이미지 일부를 확인해 주세요." : "글과 이미지 생성이 완료되었습니다.",
+      warning: draft.generationWarning || null,
+      draftId: draft.id
+    });
   } catch (error) {
     console.error(error);
+    if (job.status === "canceled") return;
     const message = error?.response?.data?.error?.message || error.message || "생성 중 오류가 발생했습니다.";
-    updateJob(job, { status: "failed", message, error: message });
+    updateJob(job, { status: "failed", phase: "failed", message, error: message });
+  } finally {
+    clearInterval(heartbeat);
+    job.workerActive = false;
+    saveJobState();
   }
 }
 
 setInterval(() => {
-  const cutoff = Date.now() - 1000 * 60 * 60 * 3;
+  const cutoff = Date.now() - 1000 * 60 * 60 * 24;
+  let changed = false;
   for (const [id, job] of generationJobs.entries()) {
-    if (new Date(job.updatedAt).getTime() < cutoff && ["completed", "failed"].includes(job.status)) generationJobs.delete(id);
+    if (new Date(job.updatedAt).getTime() < cutoff && ["completed", "failed", "canceled"].includes(job.status)) {
+      generationJobs.delete(id);
+      changed = true;
+    }
   }
+  if (changed) saveJobState();
 }, 1000 * 60 * 20).unref();
 
 app.get("/api/status", async (req, res) => {
@@ -291,14 +372,40 @@ app.post("/api/generation-jobs", async (req, res) => {
   const input = buildGenerationInput(req.body);
   if (!input.topic) return res.status(400).json({ error: "주제를 입력해 주세요." });
   const now = new Date().toISOString();
-  const job = { id: crypto.randomUUID(), status: "queued", progress: 1, message: "생성 대기 중입니다.", createdAt: now, updatedAt: now };
+  const job = {
+    id: crypto.randomUUID(),
+    status: "queued",
+    progress: 1,
+    phase: "queued",
+    attempts: 0,
+    input,
+    message: "생성 대기 중입니다.",
+    createdAt: now,
+    updatedAt: now
+  };
   generationJobs.set(job.id, job);
+  await persistGenerationJobs(generationJobs);
   res.status(202).json({ job: publicJob(job) });
   setImmediate(() => runGenerationJob(job, input));
 });
 app.get("/api/generation-jobs/:id", (req, res) => {
   const job = generationJobs.get(req.params.id);
-  if (!job) return res.status(404).json({ error: "진행 중인 생성 작업을 찾을 수 없습니다. 서버가 재시작되었을 수 있습니다." });
+  if (!job) return res.status(404).json({ error: "생성 작업 기록을 찾을 수 없습니다. 새 작업을 시작해 주세요." });
+  res.json({ job: publicJob(job) });
+});
+app.post("/api/generation-jobs/:id/retry", async (req, res) => {
+  const job = generationJobs.get(req.params.id);
+  if (!job) return res.status(404).json({ error: "다시 시작할 생성 작업을 찾을 수 없습니다." });
+  if (!job.input) return res.status(409).json({ error: "이 작업에는 다시 시작할 입력 정보가 없습니다." });
+  if (["queued", "running"].includes(job.status)) return res.json({ job: publicJob(job) });
+  updateJob(job, { status: "queued", progress: 1, phase: "queued", message: "생성 작업을 다시 준비하고 있습니다.", error: null, warning: null, draftId: null });
+  res.status(202).json({ job: publicJob(job) });
+  setImmediate(() => runGenerationJob(job, job.input));
+});
+app.delete("/api/generation-jobs/:id", async (req, res) => {
+  const job = generationJobs.get(req.params.id);
+  if (!job) return res.status(404).json({ error: "중단할 생성 작업을 찾을 수 없습니다." });
+  updateJob(job, { status: "canceled", phase: "canceled", message: "생성 작업을 중단했습니다.", error: null });
   res.json({ job: publicJob(job) });
 });
 
@@ -335,5 +442,18 @@ app.use((error, req, res, next) => {
   const message = error?.response?.data?.error?.message || error.message || "처리 중 오류가 발생했습니다.";
   res.status(error.status || 500).json({ error: message });
 });
+
+for (const job of generationJobs.values()) {
+  if (!["queued", "running"].includes(job.status)) continue;
+  if (!job.input) {
+    updateJob(job, { status: "failed", phase: "failed", message: "서버 재시작 후 입력 정보를 복원하지 못했습니다. 새 작업을 시작해 주세요.", error: "입력 정보 복원 실패" });
+    continue;
+  }
+  if (Number(job.attempts || 0) >= 3) {
+    updateJob(job, { status: "failed", phase: "failed", message: "서버 재시작이 반복되어 자동 재개를 중단했습니다. 다시 시도 버튼을 눌러 주세요.", error: "자동 재개 횟수 초과" });
+    continue;
+  }
+  setImmediate(() => runGenerationJob(job, job.input, { resumed: true }));
+}
 
 app.listen(PORT, () => console.log(`Blogger AI Auto Publisher: http://localhost:${PORT}`));
