@@ -6,6 +6,7 @@ on:
       - blogger-ai-publisher
     paths:
       - "blogger-ai-publisher/**"
+      - "render.yaml"
       - ".github/workflows/blogger-ai-check.yml"
   workflow_dispatch:
 
@@ -22,26 +23,47 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
+          cache-dependency-path: blogger-ai-publisher/package.json
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Syntax checks
         run: npm run check
-      - name: Startup smoke test
+      - name: Startup and page smoke tests
         env:
           PORT: 3099
+          APP_USERNAME: admin
           APP_PASSWORD: ci-test-password
           SESSION_SECRET: ci-test-session-secret
+          TOKEN_ENCRYPTION_KEY: ci-test-token-encryption-key
+          OPENAI_API_KEY: ci-dummy-key
           NODE_ENV: test
+          DATA_DIR: /tmp/blogger-ai-ci-data
+          GENERATED_DIR: /tmp/blogger-ai-ci-generated
         run: |
           npm start > /tmp/blogger-ai-publisher.log 2>&1 &
           APP_PID=$!
           trap 'kill $APP_PID || true' EXIT
-          for i in {1..30}; do
+          for i in {1..45}; do
             if curl -fsS http://127.0.0.1:3099/health >/dev/null; then
-              cat /tmp/blogger-ai-publisher.log
-              exit 0
+              break
             fi
             sleep 1
           done
+          curl -fsS http://127.0.0.1:3099/health | tee /tmp/health.json
+          for page in / /topics.html /growth.html /history.html /reset-generation.html; do
+            echo "Checking $page"
+            curl -fsS -u admin:ci-test-password "http://127.0.0.1:3099${page}" >/tmp/page.out
+            test -s /tmp/page.out
+          done
+          for asset in /app.js /generation-enhancements.js /thumbnail-ui.js /topics.js /growth.js /history.js /style.css; do
+            echo "Checking $asset"
+            curl -fsS -u admin:ci-test-password "http://127.0.0.1:3099${asset}" >/tmp/asset.out
+            test -s /tmp/asset.out
+          done
+          curl -fsS -u admin:ci-test-password http://127.0.0.1:3099/api/status >/tmp/status.json
+          curl -fsS -u admin:ci-test-password http://127.0.0.1:3099/api/drafts >/tmp/drafts.json
+          curl -fsS -u admin:ci-test-password http://127.0.0.1:3099/api/growth/persistence/status >/tmp/persistence.json
+          curl -fsS -u admin:ci-test-password http://127.0.0.1:3099/api/growth/history >/tmp/history.json
+          curl -fsS -u admin:ci-test-password http://127.0.0.1:3099/api/growth/topics/latest >/tmp/topics.json
           cat /tmp/blogger-ai-publisher.log
-          exit 1
