@@ -1,6 +1,7 @@
 const preview = document.querySelector("#articlePreview");
 const target = document.querySelector("#thumbnailPreview");
 const CURRENT_DRAFT_KEY = "blogger-ai-current-draft-id";
+const PREMIUM_REVIEW_KEY = "blogger-ai-premium-review-enabled";
 let publishQualityBypass = false;
 
 function toast(message, duration = 6500) {
@@ -10,6 +11,16 @@ function toast(message, duration = 6500) {
   element.classList.remove("hidden");
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => element.classList.add("hidden"), duration);
+}
+
+function configureGenerationDefaults() {
+  const checkbox = document.querySelector("#premiumReview");
+  if (!checkbox) return;
+  const saved = localStorage.getItem(PREMIUM_REVIEW_KEY);
+  checkbox.checked = saved === "true";
+  const help = checkbox.closest(".check-field")?.querySelector("small");
+  if (help) help.textContent = "선택 시 문장과 구조를 한 번 더 검수합니다. 생성 시간이 약 2~5분 늘어날 수 있습니다.";
+  checkbox.addEventListener("change", () => localStorage.setItem(PREMIUM_REVIEW_KEY, String(checkbox.checked)));
 }
 
 function addGrowthCenterLink() {
@@ -132,6 +143,7 @@ function renderThumbnailTab() {
   `;
 }
 
+configureGenerationDefaults();
 addGrowthCenterLink();
 trackOpenedDrafts();
 openRequestedDraft();
@@ -141,6 +153,6 @@ if (preview && target) {
   renderThumbnailTab();
 }
 
-import("/google-persistence.js?v=20260712-1").catch((error) => console.error("Google 자동 연결 모듈을 불러오지 못했습니다.", error));
-import("/topic-prefill.js?v=20260712-2").catch((error) => console.error("주제 발굴실 연결 모듈을 불러오지 못했습니다.", error));
-import("/data-vault.js?v=20260712-4").catch((error) => console.error("데이터 자동 보관 모듈을 불러오지 못했습니다.", error));
+import("/google-persistence.js?v=20260713-2").catch((error) => console.error("Google 자동 연결 모듈을 불러오지 못했습니다.", error));
+import("/topic-prefill.js?v=20260713-2").catch((error) => console.error("주제 발굴실 연결 모듈을 불러오지 못했습니다.", error));
+import("/data-vault.js?v=20260713-2").catch((error) => console.error("데이터 자동 보관 모듈을 불러오지 못했습니다.", error));
