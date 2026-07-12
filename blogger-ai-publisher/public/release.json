@@ -1,0 +1,12 @@
+{
+  "release": "1.6.1-stability",
+  "deployedFrom": "main-and-blogger-ai-publisher",
+  "features": [
+    "main page",
+    "topic discovery",
+    "growth center",
+    "data history",
+    "background generation",
+    "Blogger publishing"
+  ]
+}
