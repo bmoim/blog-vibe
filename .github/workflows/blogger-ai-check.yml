@@ -8,6 +8,13 @@ on:
       - "blogger-ai-publisher/**"
       - "render.yaml"
       - ".github/workflows/blogger-ai-check.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "blogger-ai-publisher/**"
+      - "render.yaml"
+      - ".github/workflows/blogger-ai-check.yml"
   workflow_dispatch:
 
 jobs:
