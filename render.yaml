@@ -1,0 +1,60 @@
+services:
+  - type: web
+    name: bmoim-blogger-ai-publisher
+    runtime: node
+    region: singapore
+    plan: free
+    rootDir: blogger-ai-publisher
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /health
+    maxShutdownDelaySeconds: 60
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_RELEASE
+        value: "1.6.0"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_TEXT_MODEL
+        value: gpt-5.6
+      - key: OPENAI_IMAGE_MODEL
+        value: gpt-image-2
+      - key: OPENAI_IMAGE_QUALITY
+        value: medium
+      - key: OPENAI_TIMEOUT_MS
+        value: "90000"
+      - key: OPENAI_IMAGE_TIMEOUT_MS
+        value: "75000"
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: APP_USERNAME
+        value: admin
+      - key: APP_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: TOKEN_ENCRYPTION_KEY
+        generateValue: true
+      - key: DAILY_GENERATION_LIMIT
+        value: "10"
+      - key: DATA_DIR
+        value: /tmp/app-data
+      - key: GENERATED_DIR
+        value: /tmp/generated
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bmoim-blogger-ai-data
+          property: connectionString
+
+databases:
+  - name: bmoim-blogger-ai-data
+    region: singapore
+    plan: free
+    postgresMajorVersion: "18"
+    databaseName: blogger_ai_data
+    user: blogger_ai_app
+    ipAllowList: []

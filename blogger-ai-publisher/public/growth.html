@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>블로그 성장 센터</title>
+  <link rel="stylesheet" href="/style.css?v=20260711-10">
+  <link rel="stylesheet" href="/growth.css?v=20260711-10">
+</head>
+<body>
+<header class="topbar growth-topbar">
+  <div>
+    <p class="eyebrow">BLOG GROWTH OPERATING SYSTEM</p>
+    <h1>블로그 성장 센터</h1>
+    <p class="subtitle">검색 성과·수익·최신성·내부링크·예약 발행·버전 관리를 한곳에서</p>
+  </div>
+  <div class="top-actions">
+    <a class="button secondary" href="/">글 작성 화면</a>
+    <a class="button secondary" href="https://www.blogger.com/" target="_blank" rel="noopener">Blogger 관리</a>
+    <button id="growthReconnectGoogle" class="button secondary">Google 권한 다시 연결</button>
+  </div>
+</header>
+
+<main class="growth-layout">
+  <section class="panel growth-setup">
+    <div class="section-heading">
+      <div><p class="step">SETUP</p><h2>데이터 연결과 작성자 설정</h2></div>
+      <span class="policy-note">읽기 전용 분석</span>
+    </div>
+    <div class="growth-grid three">
+      <label class="field"><span>Search Console 속성</span><div class="inline-field"><select id="growthSiteSelect"><option value="">속성 불러오기</option></select><button id="loadGrowthSites" class="button secondary" type="button">조회</button></div><input id="growthSiteUrl" placeholder="예: https://example.blogspot.com/"></label>
+      <label class="field"><span>GA4 속성 ID</span><input id="growthGa4Property" placeholder="예: 123456789"><small>Google Analytics의 숫자 속성 ID</small></label>
+      <label class="field"><span>AdSense 계정</span><input id="growthAdsenseAccount" placeholder="비워두면 첫 계정 자동 탐색"><small>예: accounts/pub-1234567890</small></label>
+    </div>
+    <div class="growth-grid three author-fields">
+      <label class="field"><span>작성자 이름</span><input id="growthAuthorName" placeholder="김병조"></label>
+      <label class="field"><span>직함·전문 분야</span><input id="growthAuthorRole" placeholder="콘텐츠 운영자 / 보험·생활정보 검수"></label>
+      <label class="field"><span>프로필 URL</span><input id="growthAuthorUrl" placeholder="https://..."></label>
+      <label class="field span-two"><span>작성자 소개</span><textarea id="growthAuthorBio" rows="3" placeholder="경험과 검수 범위를 구체적으로 입력하세요."></textarea></label>
+      <label class="field"><span>AI 작성 고지</span><textarea id="growthDisclosure" rows="3">AI의 도움을 받아 작성하고 사람이 최종 검수했습니다.</textarea></label>
+    </div>
+    <div class="panel-actions"><button id="saveGrowthSettings" class="button primary">설정 저장</button><p id="growthSetupMessage" class="muted"></p></div>
+  </section>
+
+  <section class="panel">
+    <div class="section-heading"><div><p class="step">DASHBOARD</p><h2>검색·방문·수익 대시보드</h2></div><button id="refreshGrowthDashboard" class="button primary">데이터 새로고침</button></div>
+    <div id="growthMetrics" class="metric-grid"><p class="muted">설정을 저장한 뒤 데이터를 불러오세요.</p></div>
+    <div class="growth-grid three result-columns">
+      <div class="result-card"><h3>클릭률 개선 대상</h3><div id="lowCtrResults" class="result-list"></div></div>
+      <div class="result-card"><h3>4~20위 상승 후보</h3><div id="nearWinResults" class="result-list"></div></div>
+      <div class="result-card"><h3>순위·클릭 하락 글</h3><div id="declineResults" class="result-list"></div></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="section-heading"><div><p class="step">CONTENT INTELLIGENCE</p><h2>글 진단과 개선</h2></div><span id="selectedDraftStatus" class="badge neutral">초안 선택 필요</span></div>
+    <div class="growth-toolbar">
+      <label class="field grow"><span>분석할 초안</span><select id="growthDraftSelect"><option value="">초안 선택</option></select></label>
+      <button id="runQualityGate" class="button secondary">품질 검사</button>
+      <button id="runCannibalization" class="button secondary">중복 키워드 검사</button>
+      <button id="runInternalLinks" class="button secondary">내부링크 추천</button>
+      <button id="runFreshnessAudit" class="button secondary">최신 정보 검수</button>
+      <button id="runVariants" class="button secondary">제목·썸네일 개선실</button>
+    </div>
+    <div id="contentIntelligenceResult" class="intelligence-result"><p class="muted">검사 버튼을 누르면 결과가 표시됩니다.</p></div>
+    <div class="panel-actions wrap">
+      <button id="applyAuthorBox" class="button secondary">작성자 신뢰도 박스 삽입</button>
+      <button id="createVersionSnapshot" class="button secondary">현재 버전 백업</button>
+      <button id="openDraftInEditor" class="button primary">선택한 초안 편집</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="section-heading"><div><p class="step">FRESHNESS WATCH</p><h2>업데이트가 필요한 글</h2></div><button id="runGrowthMonitor" class="button primary">전체 초안 검사</button></div>
+    <div id="growthMonitorResults" class="monitor-grid"><p class="muted">가격·지원금·정책·건강·금융처럼 변하기 쉬운 글을 찾아냅니다.</p></div>
+  </section>
+
+  <section class="panel">
+    <div class="section-heading"><div><p class="step">PUBLISH QUEUE</p><h2>예약 발행 대기열</h2></div><button id="runDueSchedules" class="button secondary">예약 작업 지금 확인</button></div>
+    <div class="schedule-form growth-grid three">
+      <label class="field"><span>예약할 초안</span><select id="scheduleDraftSelect"><option value="">초안 선택</option></select></label>
+      <label class="field"><span>발행할 블로그</span><select id="scheduleBlogSelect"><option value="">블로그 선택</option></select></label>
+      <label class="field"><span>발행 날짜·시간</span><input id="schedulePublishAt" type="datetime-local"></label>
+    </div>
+    <div class="panel-actions"><button id="createGrowthSchedule" class="button primary">예약 등록</button><p class="muted">서버가 잠들어 있으면 다음 실행 시 지나간 예약을 확인해 발행합니다.</p></div>
+    <div id="growthSchedules" class="schedule-list"></div>
+  </section>
+
+  <section class="panel">
+    <div class="section-heading"><div><p class="step">VERSION HISTORY</p><h2>백업과 복원</h2></div><button id="refreshVersions" class="button secondary">버전 새로고침</button></div>
+    <div id="draftVersions" class="version-list"><p class="muted">초안을 선택하면 저장된 버전이 표시됩니다.</p></div>
+  </section>
+
+  <section class="panel safety-panel">
+    <h2>안전 운영 원칙</h2>
+    <p>이 성장 센터는 검색 성과와 콘텐츠 품질을 개선하기 위한 도구입니다. 광고 자동 클릭, 봇 트래픽, 자동 새로고침, 클릭 유도 기능은 포함하지 않습니다.</p>
+  </section>
+</main>
+
+<div id="growthLoading" class="loading-overlay hidden"><div class="loader-card"><div class="spinner"></div><h2 id="growthLoadingTitle">데이터를 처리하고 있습니다</h2><p id="growthLoadingMessage">잠시만 기다려 주세요.</p></div></div>
+<div id="growthToast" class="toast hidden"></div>
+<script src="/growth.js?v=20260711-10" type="module"></script>
+<script src="/growth-backup-ui.js?v=20260711-10" type="module"></script>
+<script src="/published-update-ui.js?v=20260711-10" type="module"></script>
+</body>
+</html>

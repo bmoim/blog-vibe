@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>블로그 주제 발굴실</title>
+  <link rel="stylesheet" href="/style.css?v=20260713-1">
+  <link rel="stylesheet" href="/topics.css?v=20260713-1">
+</head>
+<body>
+<header class="topbar">
+  <div>
+    <p class="eyebrow">TOPIC OPPORTUNITY ENGINE</p>
+    <h1>블로그 주제 발굴실</h1>
+    <p class="subtitle">복잡하게 입력하지 말고, 아래 선택지에서 내 운영 방향만 고르면 한 달 주제를 자동 설계합니다.</p>
+  </div>
+  <div class="top-actions">
+    <a class="button secondary" href="/">글 작성</a>
+    <a class="button secondary" href="/growth.html">성장 센터</a>
+  </div>
+</header>
+
+<main class="topic-layout">
+  <section class="panel goal-panel">
+    <div class="section-heading"><div><p class="step">GOAL</p><h2>월 5천만원 목표 역산</h2></div><span class="policy-note">수익 보장 아님</span></div>
+    <div class="goal-grid">
+      <label class="field"><span>월 목표 수익</span><input id="monthlyGoal" type="number" value="50000000" min="0" step="100000"></label>
+      <label class="field"><span>예상 페이지 RPM</span><input id="estimatedRpm" type="number" value="10000" min="1" step="1000"></label>
+      <div class="goal-result"><span>필요 월 페이지뷰</span><strong id="requiredPageviews">5,000,000</strong><small>수익 ÷ RPM × 1,000</small></div>
+    </div>
+    <p class="goal-note">큰 목표일수록 여러 주제를 무작정 섞기보다, 내가 잘 아는 분야에서 검색 의도와 수익성을 함께 잡는 것이 중요합니다.</p>
+  </section>
+
+  <section class="panel choice-panel">
+    <div class="section-heading">
+      <div><p class="step">STEP 1</p><h2>어떤 방식으로 운영할까요?</h2><p class="section-description">하나만 선택하면 나머지 설정이 자동으로 맞춰집니다.</p></div>
+      <button id="resetTopicDefaults" class="button secondary" type="button">추천 조합으로 초기화</button>
+    </div>
+    <div id="strategyChoices" class="choice-card-grid" role="radiogroup" aria-label="블로그 운영 전략">
+      <button class="choice-card recommended" type="button" data-strategy="balanced" role="radio" aria-checked="true">
+        <span class="choice-badge">가장 추천</span>
+        <span class="choice-icon">🎯</span>
+        <strong>수익형 균형 조합</strong>
+        <small>보험 + 생활비 절감 + AI 오류 해결을 균형 있게 운영</small>
+      </button>
+      <button class="choice-card" type="button" data-strategy="insurance" role="radio" aria-checked="false">
+        <span class="choice-icon">🛡️</span>
+        <strong>보험 전문 블로그</strong>
+        <small>실손·운전자보험·보험금 청구처럼 경험이 강한 분야 집중</small>
+      </button>
+      <button class="choice-card" type="button" data-strategy="savings" role="radio" aria-checked="false">
+        <span class="choice-icon">💰</span>
+        <strong>생활비·지원금 블로그</strong>
+        <small>정부지원·세금·환급·생활비 절감 검색 수요 공략</small>
+      </button>
+      <button class="choice-card" type="button" data-strategy="ai" role="radio" aria-checked="false">
+        <span class="choice-icon">📱</span>
+        <strong>AI·스마트폰 해결 블로그</strong>
+        <small>ChatGPT·스마트폰·앱 오류처럼 빠르게 답을 찾는 독자 공략</small>
+      </button>
+      <button class="choice-card" type="button" data-strategy="evergreen" role="radio" aria-checked="false">
+        <span class="choice-icon">🌱</span>
+        <strong>꾸준한 에버그린 블로그</strong>
+        <small>계절을 덜 타고 오래 검색되는 생활 문제 해결 글 중심</small>
+      </button>
+      <button class="choice-card" type="button" data-strategy="trend" role="radio" aria-checked="false">
+        <span class="choice-icon">⚡</span>
+        <strong>최신 이슈 빠른 공략</strong>
+        <small>정책 변경·가격·오류·새 기능을 빠르게 작성해 초기 유입 확보</small>
+      </button>
+    </div>
+  </section>
+
+  <section class="panel choice-panel">
+    <div class="section-heading">
+      <div><p class="step">STEP 2</p><h2>내가 쓸 수 있는 분야를 선택하세요</h2><p class="section-description">최대 4개까지 선택할 수 있습니다. 선택한 분야만 주제 추천에 반영됩니다.</p></div>
+      <span id="pillarCount" class="badge neutral">3개 선택</span>
+    </div>
+    <div id="pillarChoices" class="pill-choice-grid" aria-label="핵심 콘텐츠 분야">
+      <label class="pill-choice"><input type="checkbox" value="insurance"><span>🛡️ 보험·실손·운전자보험</span></label>
+      <label class="pill-choice"><input type="checkbox" value="claims"><span>📄 보험금 청구·보장 분석</span></label>
+      <label class="pill-choice"><input type="checkbox" value="support"><span>🏛️ 정부지원·세금·환급</span></label>
+      <label class="pill-choice"><input type="checkbox" value="saving"><span>🧾 생활비 절감·가격 비교</span></label>
+      <label class="pill-choice"><input type="checkbox" value="ai"><span>🤖 ChatGPT·AI 활용</span></label>
+      <label class="pill-choice"><input type="checkbox" value="mobile"><span>📱 스마트폰·앱 오류 해결</span></label>
+      <label class="pill-choice"><input type="checkbox" value="health"><span>❤️ 건강·병원·생활 건강</span></label>
+      <label class="pill-choice"><input type="checkbox" value="parenting"><span>👨‍👩‍👧 육아·가족 생활</span></label>
+      <label class="pill-choice"><input type="checkbox" value="home"><span>🏠 집안 관리·생활 서비스</span></label>
+      <label class="pill-choice"><input type="checkbox" value="finance"><span>📈 재테크·경제 기초</span></label>
+    </div>
+  </section>
+
+  <section class="panel choice-panel">
+    <div class="section-heading"><div><p class="step">STEP 3</p><h2>주요 독자를 선택하세요</h2><p class="section-description">한 명의 대표 독자를 정하면 제목과 설명이 더 선명해집니다.</p></div></div>
+    <div id="audienceChoices" class="audience-choice-grid" role="radiogroup" aria-label="주요 독자">
+      <button class="audience-choice" type="button" data-audience="general" role="radio" aria-checked="true"><strong>30~60대 일반 독자</strong><small>생활 문제를 검색으로 바로 해결하려는 사람</small></button>
+      <button class="audience-choice" type="button" data-audience="insurance" role="radio" aria-checked="false"><strong>40~60대 보험 관심층</strong><small>가입·보장·청구 전에 정확한 답을 찾는 사람</small></button>
+      <button class="audience-choice" type="button" data-audience="parents" role="radio" aria-checked="false"><strong>30~50대 부모</strong><small>육아·건강·생활비 정보를 찾는 가정</small></button>
+      <button class="audience-choice" type="button" data-audience="selfemployed" role="radio" aria-checked="false"><strong>자영업자·프리랜서</strong><small>세금·지원금·보험·비용 절감이 필요한 사람</small></button>
+      <button class="audience-choice" type="button" data-audience="senior" role="radio" aria-checked="false"><strong>50~70대 중장년층</strong><small>건강·보험·스마트폰 정보를 쉽게 보고 싶은 사람</small></button>
+    </div>
+  </section>
+
+  <section class="panel generation-options">
+    <div class="section-heading"><div><p class="step">STEP 4</p><h2>추천 개수와 데이터 기준</h2></div><span id="selectionSummary" class="selection-summary">수익형 균형 조합 · 3개 분야</span></div>
+    <div class="form-grid compact-options">
+      <label class="field"><span>추천 주제 수</span><select id="topicCount"><option value="15">15개</option><option value="30" selected>30개</option><option value="40">40개</option></select></label>
+      <label class="check-field"><input id="useTopicSearchConsole" type="checkbox" checked><span><strong>Search Console 신호 반영</strong><small>내 블로그에 실제 노출된 검색어를 우선합니다.</small></span></label>
+      <button id="generateTopicPlan" class="button primary full" type="button">선택한 조건으로 한 달 주제 만들기</button>
+    </div>
+
+    <details class="advanced-topic-settings">
+      <summary>직접 문장을 수정하고 싶을 때만 열기</summary>
+      <div class="form-grid advanced-grid">
+        <label class="field full"><span>사이트의 한 문장 목적</span><textarea id="sitePurpose" rows="2"></textarea></label>
+        <label class="field full"><span>내 실제 경험과 전문성</span><textarea id="expertise" rows="2"></textarea></label>
+        <label class="field full"><span>핵심 콘텐츠 기둥</span><textarea id="pillars" rows="2"></textarea></label>
+        <label class="field full"><span>주요 독자</span><input id="topicAudience"></label>
+      </div>
+    </details>
+  </section>
+
+  <section id="topicResultsSection" class="panel hidden">
+    <div class="section-heading"><div><p class="step">TODAY</p><h2>오늘 바로 쓸 글 3개</h2></div><span id="topicSignalBadge" class="badge neutral">분석 완료</span></div>
+    <div id="todayTopics" class="today-topic-grid"></div>
+  </section>
+
+  <section id="topicStrategySection" class="panel hidden">
+    <div class="section-heading"><div><p class="step">STRATEGY</p><h2>한 달 운영 전략</h2></div></div>
+    <div id="topicPlanSummary" class="strategy-copy"></div>
+    <div id="topicClusters" class="cluster-grid"></div>
+  </section>
+
+  <section id="topicCalendarSection" class="panel hidden">
+    <div class="section-heading"><div><p class="step">30-DAY CALENDAR</p><h2>주제 캘린더</h2></div><div class="topic-filters"><select id="clusterFilter"><option value="">전체 클러스터</option></select><select id="priorityFilter"><option value="">전체 우선순위</option><option value="now">지금</option><option value="next">다음</option><option value="later">나중</option></select></div></div>
+    <div id="topicCalendar" class="topic-calendar"></div>
+  </section>
+
+  <section class="panel safety-panel">
+    <h2>주제 선택 원칙</h2>
+    <p>기회 점수는 실제 검색량이나 수익을 보장하는 수치가 아니라, 최신성·상업 의도·전문성 적합도·경쟁 기회를 상대 평가한 값입니다. 보험·건강·금융·지원금 글은 공식 출처와 실제 검수를 거쳐 발행하세요.</p>
+  </section>
+</main>
+
+<div id="topicLoading" class="loading-overlay hidden"><div class="loader-card"><div class="spinner"></div><h2>한 달 주제를 조사하고 있습니다</h2><p>선택 조건 확인 → 최신 웹 조사 → 내 검색어 분석 → 기존 글 중복 제거 → 수익 의도와 전문성 평가</p></div></div>
+<div id="topicToast" class="toast hidden"></div>
+<script src="/topics.js?v=20260713-1" type="module"></script>
+<script src="/google-persistence.js?v=20260713-1" type="module"></script>
+<script src="/data-vault.js?v=20260713-1" type="module"></script>
+</body>
+</html>

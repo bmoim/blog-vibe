@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>생성 작업 초기화</title>
+  <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4f6fb;font-family:Arial,sans-serif;color:#17182a}.card{width:min(460px,calc(100vw - 40px));padding:34px;border-radius:22px;background:#fff;box-shadow:0 18px 50px rgba(20,24,45,.12);text-align:center}.spinner{width:44px;height:44px;margin:0 auto 18px;border:5px solid #e5e7f8;border-top-color:#5b4df5;border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}h1{font-size:22px}p{color:#687083;line-height:1.65}</style>
+</head>
+<body>
+  <main class="card"><div class="spinner"></div><h1>멈춘 생성 작업을 초기화합니다</h1><p>이 브라우저에 남아 있는 이전 작업 번호만 삭제합니다. 저장된 블로그 초안은 삭제하지 않습니다.</p></main>
+  <script>
+    [
+      "blogger-ai-active-generation-job",
+      "blogger-ai-active-generation-started",
+      "blogger-ai-last-failed-generation-job",
+      "blogger-ai-pending-draft"
+    ].forEach((key) => localStorage.removeItem(key));
+    sessionStorage.removeItem("blogger-ai-vault-restored");
+    setTimeout(() => location.replace("/?generationReset=1&t=" + Date.now()), 700);
+  </script>
+</body>
+</html>
