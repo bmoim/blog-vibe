@@ -11,6 +11,7 @@ import { createCitationCleanupRouter } from "./citation-cleanup-router.js";
 import { createPersistenceRouter } from "./persistence-router.js";
 import { appendActivity } from "./activity-history.js";
 import { queryResultCaptureMiddleware } from "./query-results.js";
+import { apiErrorPayload, normalizeApiError } from "./api-error.js";
 import {
   closePersistentData,
   initializePersistentData,
@@ -100,8 +101,8 @@ if (!express.application.__growthCenterPatched) {
       this.use("/api/growth", createGrowthRouter());
       this.use("/api/growth", (error, req, res, next) => {
         console.error(error);
-        const message = error?.response?.data?.error?.message || error?.response?.data?.error || error.message || "성장 센터 처리 중 오류가 발생했습니다.";
-        res.status(error.status || error?.response?.status || 500).json({ error: String(message) });
+        const normalized = normalizeApiError(error, "성장 센터 처리 중 오류가 발생했습니다.");
+        res.status(normalized.status).json(apiErrorPayload(error, "성장 센터 처리 중 오류가 발생했습니다."));
       });
       startGrowthScheduler();
       startPersistentDataWatchers().catch((error) => console.error("Persistent data watcher failed:", error));
