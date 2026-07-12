@@ -3,6 +3,7 @@ name: Blogger AI Publisher Check
 on:
   push:
     branches:
+      - main
       - blogger-ai-publisher
     paths:
       - "blogger-ai-publisher/**"
