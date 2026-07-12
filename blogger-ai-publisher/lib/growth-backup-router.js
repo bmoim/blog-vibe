@@ -14,7 +14,8 @@ const DATA_FILES = [
   "growth-monitor.json",
   "topic-plans.json",
   "activity-history.json",
-  "query-results.json"
+  "query-results.json",
+  "generation-jobs.json"
 ];
 
 async function readOptional(file) {
