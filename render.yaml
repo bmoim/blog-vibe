@@ -22,7 +22,7 @@ services:
       - key: OPENAI_IMAGE_QUALITY
         value: medium
       - key: OPENAI_TIMEOUT_MS
-        value: "360000"
+        value: "480000"
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
