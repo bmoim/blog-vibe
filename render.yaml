@@ -9,20 +9,24 @@ services:
     startCommand: npm start
     healthCheckPath: /health
     maxShutdownDelaySeconds: 60
-    autoDeployTrigger: off
+    autoDeployTrigger: commit
     envVars:
       - key: NODE_ENV
         value: production
+      - key: APP_RELEASE
+        value: "1.6.0"
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_TEXT_MODEL
-        value: gpt-5.6-terra
+        value: gpt-5.6
       - key: OPENAI_IMAGE_MODEL
         value: gpt-image-2
       - key: OPENAI_IMAGE_QUALITY
         value: medium
       - key: OPENAI_TIMEOUT_MS
-        value: "480000"
+        value: "90000"
+      - key: OPENAI_IMAGE_TIMEOUT_MS
+        value: "75000"
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
