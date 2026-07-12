@@ -1,9 +1,9 @@
 {
   "name": "blogger-ai-autopublisher",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "private": true,
   "type": "module",
-  "description": "최신 자료 기반 SEO 글, 이미지, Blogger 발행, Search Console 분석, 콘텐츠 개선, 주제 발굴과 영구 데이터 보관을 제공하는 웹앱",
+  "description": "최신 자료 기반 SEO 글, 이미지, Blogger 발행, Search Console 분석, 콘텐츠 개선, 선택형 주제 발굴과 영구 데이터 보관을 제공하는 웹앱",
   "scripts": {
     "dev": "node --watch --import ./lib/growth-bootstrap.js server.js",
     "start": "npm run check && node --import ./lib/growth-bootstrap.js server.js",
