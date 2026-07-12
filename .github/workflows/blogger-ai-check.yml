@@ -64,7 +64,7 @@ jobs:
             curl -fsS -u admin:ci-test-password "http://127.0.0.1:3099${page}" >/tmp/page.out
             test -s /tmp/page.out
           done
-          for asset in /app.js /generation-enhancements.js /thumbnail-ui.js /topics.js /growth.js /history.js /style.css; do
+          for asset in /app.js /openai-quota-ui.js /generation-enhancements.js /thumbnail-ui.js /topics.js /growth.js /history.js /style.css; do
             echo "Checking $asset"
             curl -fsS -u admin:ci-test-password "http://127.0.0.1:3099${asset}" >/tmp/asset.out
             test -s /tmp/asset.out
