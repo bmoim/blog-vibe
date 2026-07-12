@@ -1,6 +1,6 @@
 {
   "name": "blogger-ai-autopublisher",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "private": true,
   "type": "module",
   "description": "최신 자료 기반 SEO 글, 이미지, Blogger 발행, Search Console 분석, 콘텐츠 개선, 선택형 주제 발굴, 복구 가능한 백그라운드 생성과 영구 데이터 보관을 제공하는 웹앱",
